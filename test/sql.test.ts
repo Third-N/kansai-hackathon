@@ -66,6 +66,20 @@ describe("スキーマと権限", () => {
     assert.ok(await asAnon("select * from rounds"), "rounds が読めない");
   });
 
+  it("anon は app_config を読めるが書けない", async () => {
+    assert.ok(await asAnon("select * from app_config"), "app_config が読めない");
+    assert.equal(
+      await asAnon("update app_config set value='x' where key='geoapify_key'"),
+      false,
+      "app_config を書き換えられてしまう"
+    );
+    assert.equal(
+      await asAnon("insert into app_config (key, value) values ('x','x')"),
+      false,
+      "app_config に行を足せてしまう"
+    );
+  });
+
   it("anon は票を読めない・書けない・消せない", async () => {
     const { roundId } = await newRound(60);
     await b.raw.query("select cast_vetoes($1,$2,$3)", [roundId, uid(1), ["opt1"]] as never[]);
