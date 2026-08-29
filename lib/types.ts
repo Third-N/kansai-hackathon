@@ -47,6 +47,8 @@ export interface Trip {
   /** 出発時刻（0時からの分） */
   startMin: number;
   plan: PlanItem[];
+  /** 検索して自分で足した行き先。SPOTS(lib/spots.ts)には無いのでここに持つ */
+  customSpots?: Record<string, Spot>;
   members: Member[];
   /** 今日すでに呼び出した回数 */
   callsUsed: number;

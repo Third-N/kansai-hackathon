@@ -103,7 +103,7 @@ export const localStore = {
         const done = closeExpired(read()).filter((t) => t.status === "done" && t.members.some((m) => m.id === me));
         return done.sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
     },
-    async createTrip(mode, plan, startMin) {
+    async createTrip(mode, plan, startMin, customSpots) {
         const trips = closeExpired(read());
         const trip = {
             id: crypto.randomUUID(),
@@ -112,6 +112,7 @@ export const localStore = {
             date: isoDate(),
             startMin,
             plan,
+            customSpots: customSpots && Object.keys(customSpots).length > 0 ? customSpots : undefined,
             members: [{ id: myMemberId(), label: "あなた", isHost: true, staminaFactor: 1 }],
             callsUsed: 0,
             status: "running",

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, use } from "react";
 import { store } from "@/lib/store";
-import { SPOTS, TRAVEL_TABLE } from "@/lib/spots";
+import { SPOTS, TRAVEL_TABLE, spotsFor } from "@/lib/spots";
 import { dayTypeForDate, simulate, stateAt } from "@/lib/model";
 import { secondsUntil } from "@/lib/round";
 import { hhmm } from "@/lib/format";
@@ -51,8 +51,10 @@ export default function HostPage({ params }: { params: Promise<{ id: string }> }
     return () => cancelAnimationFrame(raf);
   }, [round]);
 
+  const spots = trip ? spotsFor(trip) : SPOTS;
+
   const sim = useMemo(
-    () => (trip ? simulate(trip.plan, SPOTS, trip.startMin, {
+    () => (trip ? simulate(trip.plan, spots, trip.startMin, {
       travelTable: TRAVEL_TABLE,
       environment: toEnvironment(w, dayTypeForDate(trip.date)),
     }) : null),
@@ -71,13 +73,13 @@ export default function HostPage({ params }: { params: Promise<{ id: string }> }
     if (sim.collapseMin === null && sim.lowHpMin === null && sim.lowMpMin === null && sim.lateArrivals.length === 0) {
       return null;
     }
-    const rev = proposeRevision(trip.plan, SPOTS, trip.startMin, {
+    const rev = proposeRevision(trip.plan, spots, trip.startMin, {
       nowMin,
       restCandidates: REST_CANDIDATES,
       travelTable: TRAVEL_TABLE,
       environment: toEnvironment(w, dayTypeForDate(trip.date)),
     });
-    return interruptCopy(sim, rev, SPOTS, trip.mode);
+    return interruptCopy(sim, rev, spots, trip.mode);
   }, [trip, sim, nowMin, w]);
 
   return (

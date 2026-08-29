@@ -56,6 +56,10 @@ for (const spot of Object.values(SPOTS)) {
         holiday: scaled(1.20),
     };
 }
+/** 決まったSPOTSに、その道中で検索して足した行き先を重ねる */
+export function spotsFor(trip) {
+    return trip.customSpots ? { ...SPOTS, ...trip.customSpots } : SPOTS;
+}
 export const REST_CANDIDATES = ["tetsugaku", "kamogawa"];
 /** 実測に近い所要分。無い組は model 側で距離から近似する */
 export const TRAVEL_TABLE = {

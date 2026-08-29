@@ -22,6 +22,7 @@ function toTrip(r, members) {
         date: asDate(r.date),
         startMin: Number(r.start_min),
         plan: r.plan ?? [],
+        customSpots: r.custom_spots && Object.keys(r.custom_spots).length > 0 ? r.custom_spots : undefined,
         members,
         callsUsed: Number(r.calls_used),
         status: r.status,
@@ -169,7 +170,7 @@ export function createSupabaseStore(sb, opts = {}) {
                 fail("前の道中の取得", res.error);
             return withMembers(res.data);
         },
-        async createTrip(mode, plan, startMin) {
+        async createTrip(mode, plan, startMin, customSpots) {
             // あいことばの採番と取り直しはサーバーの中。
             // クライアントに「何回か試して駄目なら諦める」を持たせない
             const res = await sb.rpc("create_trip", {
@@ -179,6 +180,7 @@ export function createSupabaseStore(sb, opts = {}) {
                 p_member_id: await memberId(),
                 p_label: "あなた",
                 p_ttl_minutes: ROOM_TTL_MINUTES,
+                p_custom_spots: (customSpots ?? {}),
             });
             if (res.error)
                 fail("道中の作成", res.error);

@@ -1,4 +1,4 @@
-import type { Spot } from "./types";
+import type { Spot, Trip } from "./types";
 
 /* 混雑は時間帯別の推定値。リアルタイム値ではない。
    C が天候と自アプリ利用者の位置分布で補正する。 */
@@ -61,6 +61,11 @@ for (const spot of Object.values(SPOTS)) {
     saturday: scaled(1.12),
     holiday: scaled(1.20),
   };
+}
+
+/** 決まったSPOTSに、その道中で検索して足した行き先を重ねる */
+export function spotsFor(trip: Trip): Record<string, Spot> {
+  return trip.customSpots ? { ...SPOTS, ...trip.customSpots } : SPOTS;
 }
 
 export const REST_CANDIDATES = ["tetsugaku", "kamogawa"];

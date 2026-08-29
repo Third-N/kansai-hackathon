@@ -60,6 +60,18 @@ export function runStoreContract(h) {
             assert.deepEqual(updated.plan, next);
             assert.deepEqual((await store.getTrip(t.id)).plan, next);
         });
+        it("検索して足した行き先(customSpots)を持たせて道中を作れる", async () => {
+            const customSpots = {
+                "custom:1": {
+                    id: "custom:1", name: "テスト地点", sub: "自分で追加", kind: "spot",
+                    burn: 1.2, joy: 1.3, crowdByHour: {}, closeMin: 24 * 60, lat: 35, lng: 135.7,
+                },
+            };
+            const plan = [...PLAN, { spotId: "custom:1", stayMin: 40 }];
+            const t = await store.createTrip("solo", plan, 630, customSpots);
+            assert.deepEqual(t.customSpots, customSpots);
+            assert.deepEqual((await store.getTrip(t.id)).customSpots, customSpots);
+        });
         it("呼び出し回数は増え、上限で止まる", async () => {
             const t = await store.createTrip("solo", PLAN, 630);
             let trip = t;

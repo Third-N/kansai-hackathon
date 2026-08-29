@@ -1,4 +1,4 @@
-import type { Member, PlanItem, Round, RoundOption, Trip, TripMode } from "./types";
+import type { Member, PlanItem, Round, RoundOption, Spot, Trip, TripMode } from "./types";
 
 /* ============================================================
    データ境界。UI は TripStore しか触らない。
@@ -30,7 +30,13 @@ export interface TripStore {
   getActiveTrip(): Promise<Trip | null>;
   getTrip(id: string): Promise<Trip | null>;
   getLastFinished(): Promise<Trip | null>;
-  createTrip(mode: TripMode, plan: PlanItem[], startMin: number): Promise<Trip>;
+  createTrip(
+    mode: TripMode,
+    plan: PlanItem[],
+    startMin: number,
+    /** 検索して足した行き先。SPOTS に無いIDを plan が参照するときはここに入れる */
+    customSpots?: Record<string, Spot>
+  ): Promise<Trip>;
   updatePlan(id: string, plan: PlanItem[]): Promise<Trip>;
   consumeCall(id: string): Promise<Trip>;
   /** 道中を終える。これを呼ばないと getLastFinished が永久に空になる。幹事だけ */

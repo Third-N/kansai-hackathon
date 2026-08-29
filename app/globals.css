@@ -435,6 +435,24 @@ html, body {
   border-left: 2px solid var(--kariyasu); padding-left: 11px; margin: 0 0 18px;
 }
 
+.spotsearch { margin: 0 0 18px; }
+.spotsearch__input {
+  width: 100%; border: 1px solid var(--line); background: var(--panel); padding: 10px 12px;
+  font-family: inherit; font-size: 13px; color: var(--ink); box-sizing: border-box;
+}
+.spotsearch__input::placeholder { color: #9aa8b3; }
+.spotsearch__input:focus { outline: none; border-color: var(--ai); }
+.spotsearch__hint { font-size: 11px; color: var(--ink-2); margin: 7px 0 0; }
+.spotsearch__list { list-style: none; margin: 8px 0 0; padding: 0; border: 1px solid var(--line); }
+.spotsearch__list > li + li { border-top: 1px solid var(--line); }
+.spotsearch__item {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  padding: 10px 12px; font-family: inherit; color: inherit; cursor: pointer;
+}
+.spotsearch__item:hover { background: var(--panel); }
+.spotsearch__item b { display: block; font-family: var(--serif); font-weight: 600; font-size: 14px; }
+.spotsearch__item i { display: block; font-style: normal; font-size: 10.5px; color: var(--ink-2); margin-top: 2px; }
+
 /* ============ 道中記 ============ */
 .tally { display: flex; border: 1px solid var(--line); margin-bottom: 16px; }
 .tally__cell { flex: 1; padding: 14px 10px; text-align: center; }

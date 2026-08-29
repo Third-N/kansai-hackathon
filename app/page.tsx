@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Gauge } from "@/components/Gauge";
 import { store, CALLS_PER_DAY } from "@/lib/store";
-import { SPOTS, TRAVEL_TABLE } from "@/lib/spots";
+import { TRAVEL_TABLE, spotsFor } from "@/lib/spots";
 import { simulate, stateAt } from "@/lib/model";
 import { useClock } from "@/lib/useClock";
 import { DEFAULT_PLAN, DEFAULT_START_MIN } from "@/lib/defaults";
@@ -156,11 +156,12 @@ export default function HomePage() {
 }
 
 function ResumeCard({ trip, nowMin }: { trip: Trip; nowMin: number }) {
-  const sim = simulate(trip.plan, SPOTS, trip.startMin, { travelTable: TRAVEL_TABLE });
+  const spots = spotsFor(trip);
+  const sim = simulate(trip.plan, spots, trip.startMin, { travelTable: TRAVEL_TABLE });
   const { hp, mp } = stateAt(sim.timeline, nowMin);
   const current = sim.timeline.find((g) => nowMin >= g.startMin && nowMin < g.endMin);
   const remaining = sim.timeline.filter((g) => g.type === "stay" && g.startMin > nowMin).length;
-  const place = current ? SPOTS[current.spotId].name : "移動中";
+  const place = current ? spots[current.spotId].name : "移動中";
 
   return (
     <a className="resume" href={`/trip/${trip.id}`}>
@@ -179,9 +180,10 @@ function ResumeCard({ trip, nowMin }: { trip: Trip; nowMin: number }) {
 }
 
 function LastTrip({ trip }: { trip: Trip }) {
-  const sim = simulate(trip.plan, SPOTS, trip.startMin, { travelTable: TRAVEL_TABLE });
-  const spots = trip.plan.filter((p) => SPOTS[p.spotId].kind !== "rest").length;
-  const names = trip.plan.map((p) => SPOTS[p.spotId].name);
+  const spots = spotsFor(trip);
+  const sim = simulate(trip.plan, spots, trip.startMin, { travelTable: TRAVEL_TABLE });
+  const spotCount = trip.plan.filter((p) => spots[p.spotId].kind !== "rest").length;
+  const names = trip.plan.map((p) => spots[p.spotId].name);
   const [m, d] = trip.date.split("-").slice(1);
 
   return (
@@ -189,7 +191,7 @@ function LastTrip({ trip }: { trip: Trip }) {
       <span className="log__date">{Number(m)}月{Number(d)}日</span>
       <span className="log__place">{names[0]} ほか</span>
       <span className="log__stats">
-        {spots}件 ・ 気分{Math.round(sim.endMp)} ・ 体力{Math.round(sim.endHp)}
+        {spotCount}件 ・ 気分{Math.round(sim.endMp)} ・ 体力{Math.round(sim.endHp)}
       </span>
     </a>
   );

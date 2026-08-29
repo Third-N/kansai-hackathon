@@ -1,5 +1,5 @@
 "use client";
-import type { Member, PlanItem, Round, RoundOption, RoundResult, Trip, TripMode } from "./types";
+import type { Member, PlanItem, Round, RoundOption, RoundResult, Spot, Trip, TripMode } from "./types";
 import type { TripStore } from "./store-contract";
 import { CALL_BUDGET, ROOM_CAPACITY, ROOM_TTL_MINUTES } from "./store-contract";
 import type { Channel, Row, SupabaseLike } from "./supabase-like";
@@ -28,6 +28,7 @@ interface TripRow {
   date: string;
   start_min: number;
   plan: PlanItem[];
+  custom_spots: Record<string, Spot> | null;
   calls_used: number;
   status: Trip["status"];
   locked: boolean | null;
@@ -81,6 +82,7 @@ function toTrip(r: TripRow, members: Member[]): Trip {
     date: asDate(r.date),
     startMin: Number(r.start_min),
     plan: r.plan ?? [],
+    customSpots: r.custom_spots && Object.keys(r.custom_spots).length > 0 ? r.custom_spots : undefined,
     members,
     callsUsed: Number(r.calls_used),
     status: r.status,
@@ -247,7 +249,7 @@ export function createSupabaseStore(sb: SupabaseLike, opts: SupabaseStoreOptions
       return withMembers(res.data);
     },
 
-    async createTrip(mode, plan, startMin) {
+    async createTrip(mode, plan, startMin, customSpots) {
       // あいことばの採番と取り直しはサーバーの中。
       // クライアントに「何回か試して駄目なら諦める」を持たせない
       const res = await sb.rpc<TripRow>("create_trip", {
@@ -257,6 +259,7 @@ export function createSupabaseStore(sb: SupabaseLike, opts: SupabaseStoreOptions
         p_member_id: await memberId(),
         p_label: "あなた",
         p_ttl_minutes: ROOM_TTL_MINUTES,
+        p_custom_spots: (customSpots ?? {}) as unknown as Row,
       });
       if (res.error) fail("道中の作成", res.error);
       return (await withMembers(res.data))!;

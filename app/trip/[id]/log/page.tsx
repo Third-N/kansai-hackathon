@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, use } from "react";
 import { store } from "@/lib/store";
-import { SPOTS, TRAVEL_TABLE } from "@/lib/spots";
+import { SPOTS, TRAVEL_TABLE, spotsFor } from "@/lib/spots";
 import { simulate } from "@/lib/model";
 import { hhmm, signed } from "@/lib/format";
 import type { Trip } from "@/lib/types";
@@ -20,8 +20,10 @@ export default function LogPage({ params }: { params: Promise<{ id: string }> })
     })();
   }, [id]);
 
+  const spots = trip ? spotsFor(trip) : SPOTS;
+
   const sim = useMemo(
-    () => (trip ? simulate(trip.plan, SPOTS, trip.startMin, { travelTable: TRAVEL_TABLE }) : null),
+    () => (trip ? simulate(trip.plan, spots, trip.startMin, { travelTable: TRAVEL_TABLE }) : null),
     [trip]
   );
 
@@ -51,14 +53,14 @@ export default function LogPage({ params }: { params: Promise<{ id: string }> })
       </div>
 
       <div className="tally">
-        <Stat n={stays.filter((g) => SPOTS[g.spotId].kind !== "rest").length} unit="件" label="まわった" />
+        <Stat n={stays.filter((g) => spots[g.spotId].kind !== "rest").length} unit="件" label="まわった" />
         <Stat n={walkMin} unit="分" label="移動した" />
         <Stat n={Math.round(sim.endMp)} unit="" label="気分の着地" />
       </div>
 
       {best && (
         <p className="highlight">
-          いちばん気分が上がったのは <b>{SPOTS[best.spotId].name}</b> でした。
+          いちばん気分が上がったのは <b>{spots[best.spotId].name}</b> でした。
         </p>
       )}
 
@@ -69,7 +71,7 @@ export default function LogPage({ params }: { params: Promise<{ id: string }> })
             <span className="stop__node" aria-hidden />
             <div className="stop__body">
               <div className="stop__time">{hhmm(g.startMin)}–{hhmm(g.endMin)}</div>
-              <div className="stop__name">{SPOTS[g.spotId].name}</div>
+              <div className="stop__name">{spots[g.spotId].name}</div>
               <div className="chips">
                 <span className="chip chip--plus">気分<b>{signed(g.mpOut - g.mpIn)}</b></span>
               </div>

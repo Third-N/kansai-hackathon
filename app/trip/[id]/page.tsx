@@ -5,7 +5,7 @@ import { Gauge } from "@/components/Gauge";
 import { Track } from "@/components/Track";
 import { Interrupt } from "@/components/Interrupt";
 import { store, CALLS_PER_DAY } from "@/lib/store";
-import { SPOTS, TRAVEL_TABLE, REST_CANDIDATES } from "@/lib/spots";
+import { SPOTS, TRAVEL_TABLE, REST_CANDIDATES, spotsFor } from "@/lib/spots";
 import { dayTypeForDate, proposeRevisions, simulate, stateAt } from "@/lib/model";
 import { interruptCopy } from "@/lib/copy";
 import { optionsFromRevisions } from "@/lib/round";
@@ -38,6 +38,8 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
     })();
   }, [id]);
 
+  const spots = trip ? spotsFor(trip) : SPOTS;
+
   /* パーティは一番きつい人に合わせる。誰かは出さない */
   const staminaFactor = useMemo(() => {
     if (!trip) return 1;
@@ -51,7 +53,7 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
 
   const sim = useMemo(() => {
     if (!trip || !environment) return null;
-    return simulate(trip.plan, SPOTS, trip.startMin, {
+    return simulate(trip.plan, spots, trip.startMin, {
       staminaFactor,
       travelTable: TRAVEL_TABLE,
       environment,
@@ -59,7 +61,7 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
   }, [trip, staminaFactor, environment]);
 
   /* 位置。デモなら時計から、そうでなければ実機のGPS */
-  const here = useLocation(trip?.id ?? null, trip?.plan ?? [], SPOTS, sim?.timeline ?? [], nowMin);
+  const here = useLocation(trip?.id ?? null, trip?.plan ?? [], spots, sim?.timeline ?? [], nowMin);
 
   /* 訪問済みの分は動かさない。
      位置が取れているならそちらを優先する（実際に行ったかどうかで決める）。
@@ -81,7 +83,7 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
       sim.lowMpMin === null &&
       sim.lateArrivals.length === 0
     ) return [];
-    return proposeRevisions(trip.plan, SPOTS, trip.startMin, {
+    return proposeRevisions(trip.plan, spots, trip.startMin, {
       nowMin,
       fixedCount,
       restCandidates: REST_CANDIDATES,
@@ -95,7 +97,7 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
 
   const copy = useMemo(() => {
     if (!trip || !sim) return null;
-    return interruptCopy(sim, revision, SPOTS, trip.mode);
+    return interruptCopy(sim, revision, spots, trip.mode);
   }, [trip, sim, revision]);
 
   const showInterrupt =
@@ -106,7 +108,7 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
 
     // パーティは1人で決めない。全員に「せーの」で聞く
     if (trip.mode === "party" && trip.members.length > 1) {
-      const options = optionsFromRevisions(revisions, SPOTS, 4);
+      const options = optionsFromRevisions(revisions, spots, 4);
       const planByOption = Object.fromEntries(
         options.map((o, i) => [o.id, revisions[i].plan])
       );
@@ -178,7 +180,7 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
         </span>
       </div>
 
-      <Track timeline={sim.timeline} spots={SPOTS} nowMin={nowMin} collapseMin={sim.collapseMin} />
+      <Track timeline={sim.timeline} spots={spots} nowMin={nowMin} collapseMin={sim.collapseMin} />
 
       <div className="trackhead" style={{ marginTop: 22 }}>
         <span className="trackhead__title">現在地</span>
@@ -190,7 +192,7 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
 
       <Map
         plan={trip.plan}
-        spots={SPOTS}
+        spots={spots}
         here={here.fix}
         visitedCount={fixedCount}
         currentSpotId={here.spot?.id ?? null}

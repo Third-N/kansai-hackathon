@@ -47,7 +47,9 @@ function wrap(load) {
         async getActiveTrip() { return (await get()).getActiveTrip(); },
         async getTrip(id) { return (await get()).getTrip(id); },
         async getLastFinished() { return (await get()).getLastFinished(); },
-        async createTrip(mode, plan, startMin) { return (await get()).createTrip(mode, plan, startMin); },
+        async createTrip(mode, plan, startMin, customSpots) {
+            return (await get()).createTrip(mode, plan, startMin, customSpots);
+        },
         async updatePlan(id, plan) { return (await get()).updatePlan(id, plan); },
         async consumeCall(id) { return (await get()).consumeCall(id); },
         async finishTrip(id) { return (await get()).finishTrip(id); },
