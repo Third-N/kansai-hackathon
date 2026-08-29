@@ -443,6 +443,7 @@ html, body {
 .spotsearch__input::placeholder { color: #9aa8b3; }
 .spotsearch__input:focus { outline: none; border-color: var(--ai); }
 .spotsearch__hint { font-size: 11px; color: var(--ink-2); margin: 7px 0 0; }
+.spotsearch__hint a { color: inherit; text-underline-offset: 2px; }
 .spotsearch__list { list-style: none; margin: 8px 0 0; padding: 0; border: 1px solid var(--line); }
 .spotsearch__list > li + li { border-top: 1px solid var(--line); }
 .spotsearch__item {

@@ -7,6 +7,11 @@ import { SPOTS } from "@/lib/spots";
 import { DEFAULT_START_MIN } from "@/lib/defaults";
 import { useGeoapifyKey } from "@/lib/geoapify-config";
 import { searchPlaces, type PlaceSuggestion } from "@/lib/geoapify-search";
+import {
+  loadLocalPlaceDataset,
+  searchLocalPlaces,
+  type LocalPlaceDataset,
+} from "@/lib/local-place-search";
 import { makeCustomSpot } from "@/lib/custom-spot";
 import type { PlanItem, Spot, TripMode } from "@/lib/types";
 
@@ -25,6 +30,8 @@ function PlanInner() {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [searching, setSearching] = useState(false);
+  const [localDataset, setLocalDataset] = useState<LocalPlaceDataset | null>(null);
+  const [localLoadFailed, setLocalLoadFailed] = useState(false);
   const hasGeoapifyKey = !!useGeoapifyKey();
 
   const choices = [...Object.values(SPOTS).filter((s) => s.kind !== "rest"), ...Object.values(customSpots)];
@@ -32,28 +39,79 @@ function PlanInner() {
   const toggle = (id: string) =>
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
-  /* 検索は入力が止まってから投げる。1文字ごとに叩くと会場の回線がもたない */
+  useEffect(() => {
+    let active = true;
+    void loadLocalPlaceDataset()
+      .then((dataset) => {
+        if (active) setLocalDataset(dataset);
+      })
+      .catch(() => {
+        if (active) setLocalLoadFailed(true);
+      });
+    return () => { active = false; };
+  }, []);
+
+  /* まず端末内の場所を即時検索し、無いときだけGeoapifyへ問い合わせる。 */
   const searchSeq = useRef(0);
   useEffect(() => {
+    const seq = ++searchSeq.current;
     if (query.trim().length < 2) {
       setSuggestions([]);
       setSearching(false);
       return;
     }
-    const seq = ++searchSeq.current;
+
+    const local = localDataset ? searchLocalPlaces(localDataset, query) : [];
+    if (local.length > 0) {
+      setSuggestions(local);
+      setSearching(false);
+      return;
+    }
+
+    if (!localDataset && !localLoadFailed) {
+      setSuggestions([]);
+      setSearching(true);
+      return;
+    }
+
+    if (!hasGeoapifyKey) {
+      setSuggestions([]);
+      setSearching(false);
+      return;
+    }
+
     setSearching(true);
+    const controller = new AbortController();
     const timer = setTimeout(() => {
-      void searchPlaces(query).then((found) => {
-        if (searchSeq.current === seq) {
-          setSuggestions(found);
-          setSearching(false);
-        }
-      });
+      void searchPlaces(query, controller.signal)
+        .then((found) => {
+          if (searchSeq.current === seq) setSuggestions(found);
+        })
+        .catch((error: unknown) => {
+          if (!(error instanceof DOMException && error.name === "AbortError") && searchSeq.current === seq) {
+            setSuggestions([]);
+          }
+        })
+        .finally(() => {
+          if (searchSeq.current === seq) setSearching(false);
+        });
     }, 350);
-    return () => clearTimeout(timer);
-  }, [query]);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, localDataset, localLoadFailed, hasGeoapifyKey]);
 
   const addCustom = (s: PlaceSuggestion) => {
+    const existing = Object.values(customSpots).find((spot) =>
+      spot.name === s.name && spot.lat === s.lat && spot.lng === s.lng
+    );
+    if (existing) {
+      setPicked((p) => p.includes(existing.id) ? p : [...p, existing.id]);
+      setQuery("");
+      setSuggestions([]);
+      return;
+    }
     const spot = makeCustomSpot({ name: s.name, sub: s.formatted, lat: s.lat, lng: s.lng });
     setCustomSpots((c) => ({ ...c, [spot.id]: spot }));
     setPicked((p) => [...p, spot.id]);
@@ -105,38 +163,43 @@ function PlanInner() {
 
       <div className="spotsearch">
         <label className="join__label" htmlFor="spotsearch-input">ほかの行き先をさがす</label>
-        {hasGeoapifyKey ? (
-          <>
-            <input
-              id="spotsearch-input"
-              className="spotsearch__input"
-              type="text"
-              placeholder="場所の名前で検索"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            {searching && <p className="spotsearch__hint">さがしています…</p>}
-            {!searching && query.trim().length >= 2 && suggestions.length === 0 && (
-              <p className="spotsearch__hint">見つかりませんでした</p>
-            )}
-            {suggestions.length > 0 && (
-              <ul className="spotsearch__list">
-                {suggestions.map((s) => (
-                  <li key={s.key}>
-                    <button type="button" className="spotsearch__item" onClick={() => addCustom(s)}>
-                      <b>{s.name}</b>
-                      <i>{s.formatted}</i>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        ) : (
+        <input
+          id="spotsearch-input"
+          className="spotsearch__input"
+          type="search"
+          autoComplete="off"
+          placeholder="金閣寺、京都駅など"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {searching && <p className="spotsearch__hint">さがしています…</p>}
+        {!searching && query.trim().length >= 2 && suggestions.length === 0 && (
           <p className="spotsearch__hint">
-            検索には地図APIキーが要ります。道中の画面の「現在地」から設定できます。
+            {localLoadFailed
+              ? "場所データを読み込めませんでした"
+              : hasGeoapifyKey
+                ? "見つかりませんでした"
+                : "登録された場所では見つかりませんでした"}
           </p>
         )}
+        {suggestions.length > 0 && (
+          <ul className="spotsearch__list">
+            {suggestions.map((s) => (
+              <li key={s.key}>
+                <button type="button" className="spotsearch__item" onClick={() => addCustom(s)}>
+                  <b>{s.name}</b>
+                  <i>{s.formatted}</i>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="spotsearch__hint">
+          {localDataset ? `${localDataset.region}の${localDataset.places.length}件から検索` : "場所データを準備しています"}
+          {localDataset && (
+            <> ・ <a href={localDataset.attributionUrl} target="_blank" rel="noreferrer">{localDataset.attribution}</a></>
+          )}
+        </p>
       </div>
 
       {picked.length >= 4 && (

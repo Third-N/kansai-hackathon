@@ -5,6 +5,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "data:places": "node scripts/generate-kyoto-places.mjs",
     "typecheck": "tsc --noEmit",
     "test": "tsc -p tsconfig.test.json && node --import ./test/register.mjs --test \".test-out/test/*.test.js\"",
     "test:sql": "tsc -p tsconfig.test.json && node --import ./test/register.mjs --test \".test-out/test/sql.test.js\""

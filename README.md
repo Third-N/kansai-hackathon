@@ -6,8 +6,9 @@
 ```bash
 npm install
 npm run dev        # http://localhost:3000
+npm run data:places # OpenStreetMapから行き先データを再生成
 npm run typecheck
-npm test           # 契約テスト + スキーマ・権限テスト（55本）
+npm test           # 契約テスト + スキーマ・権限テスト + 場所検索
 ```
 
 Supabase を設定しなければ localStorage 実装で動く。設定は `.env.example` を参照。
@@ -162,6 +163,24 @@ npm test
   タイル地図に替えるときはこのファイルの中だけで済む
 
 歩数そのものは Web では取れないので、GPS の移動距離で代えている。
+
+## 行き先検索
+
+`/plan` の検索は、先に `public/data/kyoto-places.json` の900件を端末内で探す。
+APIキーも通信も不要で、全角・半角、空白、ひらがな・カタカナ、主要な別名を
+同一視する。軽い誤字も許し、端末内で見つからない場合だけGeoapifyへ問い合わせる。
+
+| ファイル | 中身 |
+|---|---|
+| `lib/local-place-search.ts` | 日本語の正規化、順位付け、静的JSONの読み込み |
+| `public/data/kyoto-places.json` | 京都市と宇治・大津・亀岡の主要部を含む900件 |
+| `data/curated-place-overrides.json` | 有名スポットの別名と優先順位 |
+| `scripts/generate-kyoto-places.mjs` | OpenStreetMap Overpass APIから静的JSONを再生成 |
+
+更新するときは `npm run data:places` を実行し、件数と差分を確認してからコミットする。
+Overpass APIは生成時だけ使い、アプリの実行時には呼ばない。地点データは
+[OpenStreetMap](https://www.openstreetmap.org/copyright)（ODbL）を利用し、検索欄にも
+`© OpenStreetMap contributors` を表示する。
 
 ## 見た目をいじるとき
 
