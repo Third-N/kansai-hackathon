@@ -6,13 +6,15 @@ import { Gauge } from "@/components/Gauge";
 import { store, CALLS_PER_DAY } from "@/lib/store";
 import { SPOTS, TRAVEL_TABLE } from "@/lib/spots";
 import { simulate, stateAt } from "@/lib/model";
-import { useNow } from "@/lib/useNow";
+import { useClock } from "@/lib/useClock";
+import { DEFAULT_PLAN, DEFAULT_START_MIN } from "@/lib/defaults";
+import { enterDemo, isDemoCode } from "@/lib/demo";
 import { hhmm, jpDate } from "@/lib/format";
 import type { Trip, TripMode } from "@/lib/types";
 
 export default function HomePage() {
   const router = useRouter();
-  const nowMin = useNow();
+  const nowMin = useClock();
   const [active, setActive] = useState<Trip | null>(null);
   const [last, setLast] = useState<Trip | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -38,13 +40,35 @@ export default function HomePage() {
     if (!c) return;
     setBusy(true);
     setJoinError(null);
-    const trip = await store.joinByCode(c, "旅人");
-    setBusy(false);
-    if (!trip) {
-      setJoinError("そのあいことばの待合は見つかりませんでした。");
+
+    // デモの合図。待合ではなく、早送りできる道中に入る。
+    // 先にデモモードへ入れてから作る。store がローカル実装に切り替わり、
+    // 回線や Supabase の状態に関係なく動く
+    if (isDemoCode(c)) {
+      try {
+        enterDemo(DEFAULT_START_MIN);
+        const trip = await store.createTrip("solo", DEFAULT_PLAN, DEFAULT_START_MIN);
+        router.push(`/trip/${trip.id}`);
+      } catch (e) {
+        setBusy(false);
+        setJoinError(e instanceof Error ? e.message : "デモに入れませんでした。");
+      }
       return;
     }
-    router.push(`/party/${trip.code}`);
+
+    try {
+      const trip = await store.joinByCode(c, "旅人");
+      setBusy(false);
+      if (!trip) {
+        setJoinError("そのあいことばの待合は見つかりませんでした。");
+        return;
+      }
+      router.push(`/party/${trip.code}`);
+    } catch (e) {
+      // 定員・施錠・寿命切れはサーバーが理由を返す
+      setBusy(false);
+      setJoinError(e instanceof Error ? e.message.replace(/^.*?: /, "") : "合流できませんでした。");
+    }
   };
 
   if (!loaded) return <div className="loading">読み込んでいます</div>;
@@ -92,7 +116,7 @@ export default function HomePage() {
         <label className="join__label" htmlFor="code">合流する</label>
         <div className="join__row">
           <input
-            id="code" className="join__input" value={code} maxLength={6}
+            id="code" className="join__input" value={code} maxLength={12}
             placeholder="あいことば"
             onChange={(e) => { setCode(e.target.value); setJoinError(null); }}
             onKeyDown={(e) => e.key === "Enter" && join()}

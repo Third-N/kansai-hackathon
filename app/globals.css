@@ -445,3 +445,150 @@ html, body {
 /* ホスト画面だけは端末幅の枠から出す */
 .shell:has(.host) { max-width: none; border: none; background: var(--ink); }
 .shell:has(.host)::before { display: none; }
+
+/* ============================================================
+   ここから下は、あとから足したもの。
+   デモ操作卓・地図・ロック画面風の割り込み・ホストの割り込み。
+
+   色と間隔は下のトークンだけを見ればよい。
+   :root の色（--ink / --line / --ai …）と合わせて、
+   ここを書き換えれば見た目が変わる。
+   ============================================================ */
+
+:root {
+  /* 余白の段。数字を直接書かずにこれを使う */
+  --gap-1: 6px;
+  --gap-2: 10px;
+  --gap-3: 16px;
+  --gap-4: 22px;
+  /* 角丸 */
+  --round-1: 3px;
+  --round-2: 10px;
+  --round-3: 16px;
+  /* デモ操作卓の高さ。本文の下余白がこれに合わせて伸びる */
+  --demobar-h: 92px;
+}
+
+/* ---------- 地図 ---------- */
+
+.map {
+  margin-top: var(--gap-2);
+  border: 1px solid var(--line);
+  border-radius: var(--round-1);
+  background: #fff;
+  overflow: hidden;
+}
+.map svg { display: block; width: 100%; height: auto; }
+.map__routedone { fill: none; stroke: var(--ai); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; opacity: .85; }
+.map__routerest { fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-dasharray: 4 4; stroke-linejoin: round; opacity: .5; }
+.map__dot { fill: #fff; stroke: var(--ink-2); stroke-width: 2; }
+.map__spot.is-done .map__dot { fill: var(--ai); stroke: var(--ai); }
+.map__spot.is-here .map__dot { fill: var(--shu); stroke: var(--shu); }
+.map__num { font-family: var(--dot); font-size: 9px; text-anchor: middle; fill: var(--ink-2); }
+.map__spot.is-done .map__num, .map__spot.is-here .map__num { fill: #fff; }
+.map__name { font-size: 9.5px; text-anchor: middle; fill: var(--ink); }
+.map__acc { fill: var(--shu); opacity: .10; }
+.map__pin { fill: var(--shu); stroke: #fff; stroke-width: 2; }
+.map__here.is-demo .map__pin { fill: var(--ai); }
+.map__here.is-demo .map__acc { fill: var(--ai); }
+.map__legend {
+  border-top: 1px solid var(--line);
+  padding: var(--gap-1) var(--gap-2);
+  font-family: var(--dot); font-size: 10px; color: var(--ink-2);
+}
+
+/* ---------- ロック画面風の割り込み ---------- */
+
+.interrupt__eyebrow { display: flex; justify-content: space-between; align-items: center; }
+.interrupt__at { font-family: var(--dot); opacity: .8; }
+
+.interrupt--lock {
+  background: rgba(20, 28, 36, .92);
+  color: #eef2f5;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: var(--round-3);
+  padding: var(--gap-3);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .55);
+}
+.interrupt--lock .interrupt__eyebrow { color: rgba(238, 242, 245, .66); }
+.interrupt--lock .interrupt__title { color: #fff; }
+.interrupt--lock .interrupt__body { color: rgba(238, 242, 245, .8); }
+.interrupt--lock .btn--ghost { color: rgba(238, 242, 245, .8); border-color: rgba(255, 255, 255, .28); }
+
+/* ---------- ホスト画面の割り込み（保険1） ---------- */
+
+.host__alert {
+  margin-top: var(--gap-4);
+  border: 1px solid var(--shu);
+  border-left-width: 4px;
+  border-radius: var(--round-1);
+  padding: var(--gap-3) var(--gap-4);
+  background: #fff;
+}
+.host__alerteyebrow {
+  font-family: var(--dot); font-size: 11px; letter-spacing: .2em; color: var(--shu);
+}
+.host__alerttitle {
+  font-family: var(--serif); font-weight: 800; font-size: 26px; line-height: 1.45;
+  margin: var(--gap-2) 0 0;
+}
+.host__alertbody { font-size: 16px; line-height: 1.8; color: var(--ink-2); margin: var(--gap-2) 0 0; }
+.host__alertfoot { font-family: var(--dot); font-size: 11px; color: var(--ink-2); margin: var(--gap-3) 0 0; }
+
+/* ---------- デモ操作卓 ---------- */
+
+.demobar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  background: rgba(20, 28, 36, .96);
+  color: #eef2f5;
+  border-top: 1px solid rgba(255, 255, 255, .18);
+  padding: var(--gap-2) var(--gap-3) calc(var(--gap-2) + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: var(--gap-1);
+  font-family: var(--dot);
+}
+.demobar__row { display: flex; align-items: center; gap: var(--gap-2); }
+.demobar__row--wrap { flex-wrap: wrap; gap: var(--gap-1); }
+.demobar__play {
+  width: 34px; height: 34px; flex: none;
+  background: #eef2f5; color: #141c24; border: 0; border-radius: var(--round-2);
+  font-size: 13px; cursor: pointer;
+}
+.demobar__slider { flex: 1; min-width: 90px; accent-color: #eef2f5; }
+.demobar__clock { font-size: 17px; min-width: 54px; text-align: right; }
+.demobar__label { font-size: 10px; opacity: .6; margin-left: var(--gap-1); }
+.demobar__chip {
+  background: transparent; color: #eef2f5;
+  border: 1px solid rgba(255, 255, 255, .3); border-radius: var(--round-1);
+  padding: 3px 8px; font-size: 11px; font-family: var(--dot); cursor: pointer;
+}
+.demobar__chip.is-on { background: #eef2f5; color: #141c24; border-color: #eef2f5; }
+.demobar__temp {
+  width: 48px; background: transparent; color: #eef2f5;
+  border: 1px solid rgba(255, 255, 255, .3); border-radius: var(--round-1);
+  padding: 3px 4px; font-family: var(--dot); font-size: 11px;
+}
+.demobar__unit { font-size: 11px; opacity: .7; }
+.demobar__exit {
+  margin-left: auto; background: transparent; color: rgba(238, 242, 245, .7);
+  border: 0; font-family: var(--dot); font-size: 11px; cursor: pointer; text-decoration: underline;
+}
+
+/* 操作卓の下に本文が隠れないように */
+body:has(.demobar) .shell { padding-bottom: var(--demobar-h); }
+
+/* ---------- 見た目の一覧（/style）。本番の画面では使わない ---------- */
+
+.sg__swatches { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-1); }
+.sg__swatch { display: flex; align-items: center; gap: var(--gap-2); font-size: 11px; }
+.sg__swatch i { width: 26px; height: 26px; border-radius: var(--round-1); border: 1px solid var(--line); flex: none; }
+.sg__swatch b { font-family: var(--dot); font-weight: 400; }
+.sg__swatch span { color: var(--ink-2); }
+.sg__type p { margin: 0 0 var(--gap-2); }
+.sg__scale { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--gap-3); }
+.sg__scaleitem { display: flex; flex-direction: column; align-items: center; gap: var(--gap-1); }
+.sg__scaleitem i { display: block; background: var(--ai); border-radius: 2px; }
+.sg__scaleitem b { font-family: var(--dot); font-weight: 400; font-size: 10px; color: var(--ink-2); }
+.sg__knob { display: flex; align-items: center; gap: var(--gap-2); font-family: var(--dot); font-size: 11px; color: var(--ink-2); margin-bottom: var(--gap-1); }
+.sg__knob input { flex: 1; accent-color: var(--ai); }
+.sg__row { display: flex; gap: var(--gap-2); }

@@ -14,7 +14,20 @@ import type { TripStore } from "./store-contract";
 
 export function deferredStore(load: () => Promise<TripStore>): TripStore {
   let pending: Promise<TripStore> | null = null;
-  const get = (): Promise<TripStore> => (pending ??= load());
+  return wrap(() => (pending ??= load()));
+}
+
+/**
+ * 呼ばれるたびに実装を選び直す包み。
+ * デモモードのときは Supabase を通さず localStorage に落とすために使う。
+ * 会場の Wi-Fi が死んでもデモが止まらないようにするのが目的。
+ */
+export function routedStore(pick: () => TripStore): TripStore {
+  return wrap(async () => pick());
+}
+
+function wrap(load: () => Promise<TripStore>): TripStore {
+  const get = (): Promise<TripStore> => load();
 
   const subscribe = (
     attach: (s: TripStore) => () => void

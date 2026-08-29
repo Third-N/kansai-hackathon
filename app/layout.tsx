@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { DemoBar } from "@/components/DemoBar";
 
 export const metadata: Metadata = {
   title: "道中",
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja">
       <body>
         <div className="shell">{children}</div>
+        <DemoBar />
       </body>
     </html>
   );

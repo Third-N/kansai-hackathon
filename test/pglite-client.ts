@@ -157,6 +157,13 @@ export async function createPgliteBackend(migrationsDir = "supabase/migrations")
     grant execute on function auth.uid() to anon, authenticated;
   `);
 
+  // Supabase は public スキーマの新しいテーブルに既定の GRANT を付ける。
+  // それが無い状態でテストすると「権限を与えていないから安全」に見えてしまい、
+  // 実プロジェクトとずれる。同じ既定をここでも作っておく
+  await db.exec(`
+    alter default privileges in schema public grant all on tables to anon, authenticated;
+  `);
+
   const files = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort();
   for (const f of files) {
     await db.exec(readFileSync(join(migrationsDir, f), "utf8"));

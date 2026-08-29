@@ -10,14 +10,18 @@ import { dayTypeForDate, proposeRevisions, simulate, stateAt } from "@/lib/model
 import { interruptCopy } from "@/lib/copy";
 import { optionsFromRevisions } from "@/lib/round";
 import { useRouter } from "next/navigation";
-import { useNow } from "@/lib/useNow";
+import { useClock } from "@/lib/useClock";
+import { useLocation } from "@/lib/useLocation";
+import { weather, toEnvironment } from "@/lib/weather";
+import { Map } from "@/components/Map";
 import { hhmm, jpDate } from "@/lib/format";
 import type { Trip } from "@/lib/types";
 
 export default function TripPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const nowMin = useNow();
+  const nowMin = useClock();
+  const w = weather.use();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -36,23 +40,34 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
     return Math.max(...trip.members.map((m) => m.staminaFactor));
   }, [trip]);
 
+  const environment = useMemo(
+    () => (trip ? toEnvironment(w, dayTypeForDate(trip.date)) : null),
+    [trip, w]
+  );
+
   const sim = useMemo(() => {
-    if (!trip) return null;
+    if (!trip || !environment) return null;
     return simulate(trip.plan, SPOTS, trip.startMin, {
       staminaFactor,
       travelTable: TRAVEL_TABLE,
-      environment: { dayType: dayTypeForDate(trip.date) },
+      environment,
     });
-  }, [trip, staminaFactor]);
+  }, [trip, staminaFactor, environment]);
 
-  /* 訪問済みの分は動かさない */
+  /* 位置。デモなら時計から、そうでなければ実機のGPS */
+  const here = useLocation(trip?.id ?? null, trip?.plan ?? [], SPOTS, sim?.timeline ?? [], nowMin);
+
+  /* 訪問済みの分は動かさない。
+     位置が取れているならそちらを優先する（実際に行ったかどうかで決める）。
+     取れていなければ時計から推す。 */
   const fixedCount = useMemo(() => {
     if (!sim || !trip) return 0;
+    if (here.observing) return here.visitedCount;
     return trip.plan.filter((_, i) => {
       const seg = sim.timeline.find((g) => g.type === "stay" && g.spotId === trip.plan[i].spotId);
       return seg ? nowMin >= seg.endMin : false;
     }).length;
-  }, [sim, trip, nowMin]);
+  }, [sim, trip, nowMin, here.observing, here.visitedCount]);
 
   const revisions = useMemo(() => {
     if (!trip || !sim) return [];
@@ -68,9 +83,9 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
       restCandidates: REST_CANDIDATES,
       staminaFactor,
       travelTable: TRAVEL_TABLE,
-      environment: { dayType: dayTypeForDate(trip.date) },
+      environment: environment ?? undefined,
     });
-  }, [trip, sim, nowMin, fixedCount, staminaFactor]);
+  }, [trip, sim, nowMin, fixedCount, staminaFactor, environment]);
 
   const revision = revisions[0] ?? null;
 
@@ -161,10 +176,40 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
 
       <Track timeline={sim.timeline} spots={SPOTS} nowMin={nowMin} collapseMin={sim.collapseMin} />
 
+      <div className="trackhead" style={{ marginTop: 22 }}>
+        <span className="trackhead__title">現在地</span>
+        <span className="trackhead__note">
+          {here.spot ? here.spot.name : here.fix ? "移動中" : "位置なし"}
+          {here.observation.walkedKm > 0.05 && ` ・ 歩いた距離 ${here.observation.walkedKm.toFixed(1)}km`}
+        </span>
+      </div>
+
+      <Map
+        plan={trip.plan}
+        spots={SPOTS}
+        here={here.fix}
+        visitedCount={fixedCount}
+        currentSpotId={here.spot?.id ?? null}
+      />
+
+      {here.permission === "denied" && (
+        <p className="partynote">
+          位置情報が使えないので、時刻から現在地を推しています。
+        </p>
+      )}
+
       {toast && <div className="toast">{toast}</div>}
 
       {showInterrupt && copy && (
-        <Interrupt copy={copy} onPrimary={accept} onSecondary={() => setDismissed(true)} />
+        <Interrupt
+          copy={copy}
+          onPrimary={accept}
+          onSecondary={() => setDismissed(true)}
+          /* iOS では Push が鳴らないので、ロック画面風のバナーを画面の中に描く（企画書の保険2）。
+             ふつうのカードに戻すなら variant="card" */
+          variant="lock"
+          at={hhmm(nowMin)}
+        />
       )}
     </div>
   );

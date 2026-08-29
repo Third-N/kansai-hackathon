@@ -6,7 +6,11 @@ import { SPOTS, TRAVEL_TABLE } from "@/lib/spots";
 import { dayTypeForDate, simulate, stateAt } from "@/lib/model";
 import { secondsUntil } from "@/lib/round";
 import { hhmm } from "@/lib/format";
-import { useNow } from "@/lib/useNow";
+import { useClock } from "@/lib/useClock";
+import { weather, toEnvironment } from "@/lib/weather";
+import { proposeRevision } from "@/lib/model";
+import { interruptCopy } from "@/lib/copy";
+import { REST_CANDIDATES } from "@/lib/spots";
 import type { Round, Trip } from "@/lib/types";
 
 /* ============================================================
@@ -16,7 +20,8 @@ import type { Round, Trip } from "@/lib/types";
 
 export default function HostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const nowMin = useNow(10_000);
+  const nowMin = useClock(10_000);
+  const w = weather.use();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [round, setRound] = useState<Round | null>(null);
   const [left, setLeft] = useState(999);
@@ -47,7 +52,7 @@ export default function HostPage({ params }: { params: Promise<{ id: string }> }
   const sim = useMemo(
     () => (trip ? simulate(trip.plan, SPOTS, trip.startMin, {
       travelTable: TRAVEL_TABLE,
-      environment: { dayType: dayTypeForDate(trip.date) },
+      environment: toEnvironment(w, dayTypeForDate(trip.date)),
     }) : null),
     [trip]
   );
@@ -56,6 +61,22 @@ export default function HostPage({ params }: { params: Promise<{ id: string }> }
 
   const { hp, mp } = stateAt(sim.timeline, nowMin);
   const revealed = round?.status === "revealed" && !!round.result;
+
+  /* 企画書の保険1。iOS で Push が鳴らない当日、幹事のこの1台に割り込みを出す。
+     押す操作は各自の端末でやるので、ここは読み上げるだけ */
+  const alert = useMemo(() => {
+    if (!trip || !sim) return null;
+    if (sim.collapseMin === null && sim.lowHpMin === null && sim.lowMpMin === null && sim.lateArrivals.length === 0) {
+      return null;
+    }
+    const rev = proposeRevision(trip.plan, SPOTS, trip.startMin, {
+      nowMin,
+      restCandidates: REST_CANDIDATES,
+      travelTable: TRAVEL_TABLE,
+      environment: toEnvironment(w, dayTypeForDate(trip.date)),
+    });
+    return interruptCopy(sim, rev, SPOTS, trip.mode);
+  }, [trip, sim, nowMin, w]);
 
   return (
     <div className="host">
@@ -77,16 +98,21 @@ export default function HostPage({ params }: { params: Promise<{ id: string }> }
         <HostGauge label="気分" value={mp} color="var(--kariyasu)" />
       </section>
 
-      {!round && (
+      {!round && !alert && (
         <div className="host__idle">
-          <p className="host__idlemain">
-            {sim.collapseMin === null && sim.lowHpMin === null && sim.lowMpMin === null
-              ? "このまま行けます"
-              : "このままだと、どこかで限界を下回ります"}
-          </p>
+          <p className="host__idlemain">このまま行けます</p>
           <p className="host__idlesub">
             残り{sim.timeline.filter((g) => g.type === "stay" && g.startMin > nowMin).length}件
           </p>
+        </div>
+      )}
+
+      {!round && alert && (
+        <div className="host__alert">
+          <div className="host__alerteyebrow">呼び出し</div>
+          <p className="host__alerttitle">{alert.title}</p>
+          <p className="host__alertbody">{alert.body}</p>
+          <p className="host__alertfoot">手元の端末に同じものが出ています</p>
         </div>
       )}
 
