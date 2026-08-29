@@ -2,7 +2,7 @@
 import type { Member, Round, Trip } from "./types";
 import type { TripStore } from "./store-contract";
 import { CALL_BUDGET, ROOM_CAPACITY, ROOM_TTL_MINUTES } from "./store-contract";
-import { resolveRound, roundTiebreak } from "./round";
+import { resolveRound, roundTiebreak, vetoCap } from "./round";
 import { myMemberId } from "./identity";
 import { isoDate } from "./format";
 import { makeCode } from "./code";
@@ -232,8 +232,15 @@ export const localStore: TripStore = {
     const i = rounds.findIndex((r) => r.id === roundId);
     if (i < 0 || rounds[i].status === "revealed") return;
 
+    // UIだけの制約にしない。RPC相当のここでも上限を強制する
+    const cap = vetoCap(rounds[i].options.length);
+    const distinct = [...new Set(optionIds)];
+    if (distinct.length > cap) {
+      throw new Error(`反対は${cap}つまでです`);
+    }
+
     const vetoes = readVetoes().filter((v) => !(v.roundId === roundId && v.memberId === memberId));
-    writeVetoes([...vetoes, ...optionIds.map((optionId) => ({ roundId, memberId, optionId }))]);
+    writeVetoes([...vetoes, ...distinct.map((optionId) => ({ roundId, memberId, optionId }))]);
 
     const subs = readSubmissions();
     if (!subs.some((x) => x.roundId === roundId && x.memberId === memberId)) {

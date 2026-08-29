@@ -131,8 +131,10 @@ describe("スキーマと権限", () => {
 
   it("反対数は選択肢の並び順で返る", async () => {
     const { roundId } = await newRound(-1);
+    // 4択の上限（vetoCap）は1人1つ。opt2に2票、opt3に1票は2人に分けてつける
     await b.raw.query("select cast_vetoes($1,$2,$3)", [roundId, uid(1), ["opt2"]] as never[]);
-    await b.raw.query("select cast_vetoes($1,$2,$3)", [roundId, uid(2), ["opt2", "opt3"]] as never[]);
+    await b.raw.query("select cast_vetoes($1,$2,$3)", [roundId, uid(2), ["opt2"]] as never[]);
+    await b.raw.query("select cast_vetoes($1,$2,$3)", [roundId, uid(3), ["opt3"]] as never[]);
     const r = await b.raw.query<{ r: { result: { tally: { optionId: string; count: number }[] } } }>(
       "select to_jsonb(reveal_round($1)) as r", [roundId]
     );
@@ -142,6 +144,23 @@ describe("スキーマと権限", () => {
       { optionId: "opt3", count: 1 },
       { optionId: "opt4", count: 0 },
     ]);
+  });
+
+  it("反対の上限（vetoCap）を超える投票は拒む", async () => {
+    // 4択なので上限は1人1つ。UIだけでなく cast_vetoes 自身が守る
+    const { roundId } = await newRound(60);
+    let ok = true;
+    try {
+      await b.raw.query("select cast_vetoes($1,$2,$3)", [roundId, uid(1), ["opt1", "opt2"]] as never[]);
+    } catch { ok = false; }
+    assert.equal(ok, false, "上限を超えた投票が通ってしまう");
+
+    // 上限内なら通り、提出者としては数えられる
+    await b.raw.query("select cast_vetoes($1,$2,$3)", [roundId, uid(1), ["opt1"]] as never[]);
+    const r = await b.raw.query<{ submitted_count: number }>(
+      "select submitted_count from rounds where id=$1", [roundId]
+    );
+    assert.equal(r.rows[0].submitted_count, 1);
   });
 
   it("開いている部屋どうしでは、あいことばは重複できない", async () => {
