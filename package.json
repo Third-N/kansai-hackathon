@@ -5,14 +5,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --import ./test/register.mjs --test \".test-out/test/*.test.js\"",
+    "test:sql": "tsc -p tsconfig.test.json && node --import ./test/register.mjs --test \".test-out/test/sql.test.js\""
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.4",
     "next": "^15.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^22.14.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

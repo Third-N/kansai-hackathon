@@ -78,6 +78,21 @@ export function resolveRound(
   return { tally, winnerId: pick.optionId, kind: "compromise", survivorCount: 0 };
 }
 
+/**
+ * 決めきれないときの選び手。乱数ではなく round id から決める。
+ * 開示は冪等でなければならないので、同じ round なら何度呼んでも同じ答えが要る。
+ * Math.random() だと、2回目の開示で別の案が勝ちうる。
+ * SQL 側の round_tiebreak() と同じ役割（値の一致は要らない。どちらも決定論的であればよい）。
+ */
+export function roundTiebreak(roundId: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < roundId.length; i++) {
+    h ^= roundId.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return (h % 1000000) / 1000000;
+}
+
 /** 開示までの残り秒。サーバー時刻から逆算する。端末のタイマーは信用しない */
 export function secondsUntil(revealAtIso: string, now: number = Date.now()): number {
   return Math.max(0, (new Date(revealAtIso).getTime() - now) / 1000);

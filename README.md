@@ -5,9 +5,12 @@
 
 ```bash
 npm install
-npm run dev     # http://localhost:3000
+npm run dev        # http://localhost:3000
 npm run typecheck
+npm test           # 契約テスト + スキーマ・権限テスト（55本）
 ```
+
+Supabase を設定しなければ localStorage 実装で動く。設定は `.env.example` を参照。
 
 ## 画面
 
@@ -27,21 +30,45 @@ npm run typecheck
 - `components/` と `app/` の見た目、`app/globals.css` のトークン
 - 触ってよい。ロジックの入出力の形は変えない
 
-### B（Realtime・状態）
-- `lib/store.ts` の `TripStore` を Supabase 実装に差し替える。
-  UI は `store` しか触らないので、ここだけで済む
-- 今は localStorage 実装。`subscribeMembers` は storage イベントで代用しているので、
-  Realtime のチャンネル購読に置き換える
-- 想定スキーマは `lib/store.ts` 冒頭のコメント参照
-- 「せーの」は `openRound` / `castVetoes` / `reveal` / `subscribeRound` として
-  ローカル実装済み。同じ約束を Supabase 側で守る
-  - `vetoes` は INSERT のみ許可、**SELECT 不可の RLS**。UIで隠すのは伏せたことにならない。
-    ローカル実装でも票は `readVetoes` の外に出していない
-  - 全員が購読するのは `rounds` の1行だけ。チャンネルは1本で足りる
-  - カウントダウンは端末のタイマーではなく `reveal_at`（サーバー時刻）から逆算する。
-    画面側は `secondsUntil()` で毎フレーム引き直しているので、実装を変えてもズレない
-  - `reveal` は**冪等**。開示済みなら何もせず返し、開示時刻より前でも何もしない。
-    `subscribeRound` が時刻超過を見つけたら誰の端末でも呼ぶので、幹事が落ちても止まらない
+### B（Realtime・状態）— 実装済み
+
+`TripStore` の実装が2つある。UI は `store` しか触らないので、切り替えても一行も変わらない。
+
+| ファイル | 中身 |
+|---|---|
+| `lib/store-contract.ts` | 契約。`TripStore` と `CALL_BUDGET` |
+| `lib/store.local.ts` | localStorage 実装。既定。開発と単機デモ用 |
+| `lib/store.supabase.ts` | Supabase 実装 |
+| `lib/store.deferred.ts` | 遅延読み込みの包み。使わない人に supabase-js を配らないため |
+| `lib/store.ts` | どちらを使うか決めるだけ。UI が触るのはここ |
+| `lib/supabase-like.ts` | 使うメソッドだけを写した型。テストで差し替えるための一枚 |
+| `lib/storage.ts` | localStorage の置き場。SSR とテストではメモリに落ちる |
+| `supabase/migrations/0001_init.sql` | テーブル・RLS・RPC |
+
+**環境変数が両方あれば Supabase、無ければ localStorage。** 判定は `lib/store.ts` の1箇所だけ。
+`storeKind` で今どちらが動いているか取れる。
+
+#### Supabase を用意する
+
+1. プロジェクトを作る
+2. SQL Editor に `supabase/migrations/0001_init.sql` を貼って実行する
+3. Database → Replication で `rounds` と `members` の Realtime を有効にする
+4. `.env.local` に `NEXT_PUBLIC_SUPABASE_URL` と `NEXT_PUBLIC_SUPABASE_ANON_KEY` を書く
+
+#### 守っている約束
+
+- **票は誰にも読めない。** `vetoes` と `submissions` には権限を1つも与えていない。
+  読めない・書けない・消せない。触れるのは `security definer` の RPC の中だけ。
+  「UIで隠す」のではなく、読む手段そのものを与えていない
+- **開示は冪等。** `reveal_round` は開示済みなら何もせず返し、開示時刻より前でも何もしない。
+  誰の端末から呼んでもよい。幹事が落ちても、購読している誰かが時刻超過を見つけて呼ぶ
+- **カウントダウンはサーバー時刻。** `reveal_at` は `open_round` RPC が `now()` から決める。
+  開いた端末の時計のずれを全員に配らないため
+- **決めきれないときの選び手は乱数ではない。** `round_tiebreak(round_id)` で決める。
+  `Math.random()` だと、冪等なはずの2回目の開示で別の案が勝ちうる
+- **購読するのは `rounds` の1行だけ。** チャンネルは1本
+- **Realtime が落ちても止まらない。** 購読には必ずポーリングの保険が付いている。
+  会場のWi-Fiで WebSocket が切れる前提
 
 ### C（体力・混雑・再構成）
 - `lib/model.ts` の `simulate` と `proposeRevision` が境界。
@@ -51,6 +78,26 @@ npm run typecheck
 - `lib/spots.ts` の `crowdByHour` は時間帯別の推定値。リアルタイムではない。
   ここに天候と自アプリ利用者の位置分布を足す
 - `travelMinutes` は表に無い組を直線距離で近似している。経路APIに置き換える
+
+## テスト
+
+```bash
+npm test
+```
+
+- `test/store.contract.ts` … **実装によらず変わってはいけない約束**。
+  localStorage 実装・Supabase 実装・遅延読み込みの包み、の3つすべてに同じものを当てる。
+  実装を足すときは harness を1つ渡すだけでよい
+- `test/pglite-client.ts` … PGlite（WASM の PostgreSQL 18）に `SupabaseLike` をかぶせたもの。
+  作り物ではなく、`supabase/migrations` の SQL を**本物の PostgreSQL に流して**テストしている。
+  RLS も RPC も本物
+- `test/sql.test.ts` … アプリを通さずに何ができてしまうかを見る。
+  票が読めないことは UI では確かめようがない
+- `test/store.live.test.ts` … 本物の Supabase に同じ契約テストを流す。
+  `DOCHU_LIVE_TEST=1` と URL/KEY を設定したときだけ走る
+
+**PGlite で再現できないのは Realtime の push だけ。** そこはポーリングの保険が効くので
+落ちていても動くが、実機で一度は通しておくこと。
 
 ## 設計上、崩してはいけない点
 
@@ -86,3 +133,6 @@ npm run typecheck
 - Push通知（iOS はホーム画面に追加しないと飛ばない。画面内の割り込みが本線）
 - `/public/icon-192.png` と `/icon-512.png`（manifest が参照している）
 - 写真（道中記に置き場所だけ作ってある）
+- **道中を終える導線。** `store.finishTrip(id)` は用意したが、押す場所がまだ無い。
+  これを呼ばないと `getLastFinished()`（ホームの「前の道中」）が永久に空のまま
+- Realtime の push を実機で通すこと（ポーリングの保険は効いている）
