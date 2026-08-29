@@ -35,24 +35,30 @@ export default function HomePage() {
     router.push(`/plan?mode=${mode}`);
   };
 
+  // 早送りできる道中に入る。先にデモモードへ入れてから作る。
+  // store がローカル実装に切り替わり、回線や Supabase の状態に関係なく動く
+  const startDemo = async () => {
+    setBusy(true);
+    setJoinError(null);
+    try {
+      enterDemo(DEFAULT_START_MIN);
+      const trip = await store.createTrip("solo", DEFAULT_PLAN, DEFAULT_START_MIN);
+      router.push(`/trip/${trip.id}`);
+    } catch (e) {
+      setBusy(false);
+      setJoinError(e instanceof Error ? e.message : "デモに入れませんでした。");
+    }
+  };
+
   const join = async () => {
     const c = code.trim();
     if (!c) return;
     setBusy(true);
     setJoinError(null);
 
-    // デモの合図。待合ではなく、早送りできる道中に入る。
-    // 先にデモモードへ入れてから作る。store がローカル実装に切り替わり、
-    // 回線や Supabase の状態に関係なく動く
+    // あいことば欄への隠し合図も引き続き使える
     if (isDemoCode(c)) {
-      try {
-        enterDemo(DEFAULT_START_MIN);
-        const trip = await store.createTrip("solo", DEFAULT_PLAN, DEFAULT_START_MIN);
-        router.push(`/trip/${trip.id}`);
-      } catch (e) {
-        setBusy(false);
-        setJoinError(e instanceof Error ? e.message : "デモに入れませんでした。");
-      }
+      await startDemo();
       return;
     }
 
@@ -130,6 +136,13 @@ export default function HomePage() {
           <button className="join__btn" onClick={join} disabled={busy || !code.trim()}>合流</button>
         </div>
         {joinError && <p className="join__error">{joinError}</p>}
+      </section>
+
+      <section className="demoentry">
+        <button className="demolink" onClick={startDemo} disabled={busy}>
+          デモを試す
+          <i>会場を歩けなくても、時計を早送りして動かせます</i>
+        </button>
       </section>
 
       {last && (

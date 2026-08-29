@@ -9,8 +9,9 @@ import type { DayType } from "./types";
    model.ts は最初から雨と気温を受け取れたのに、画面から一度も
    渡していなかった。ここが入口。
 
-   外部の天気APIには繋いでいない（キーが要る）。当日は手で入れる。
-   繋ぐときは fetchWeather を1つ足して set するだけでよい。
+   通常の道中では lib/useRealWeather.ts が Open-Meteo（キー不要）から
+   実際の予報を取ってきて、ここに set する。デモ中は操作卓の手入力を
+   優先し、実測では上書きしない。
    ============================================================ */
 
 export type Rain = "none" | "light" | "heavy";
