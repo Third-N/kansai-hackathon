@@ -2,6 +2,7 @@
 import { DEMO_SPEEDS, demo, exitDemo } from "@/lib/demo";
 import { weather, RAIN_LABEL, type Rain } from "@/lib/weather";
 import { hhmm } from "@/lib/format";
+import { useEffect, useRef } from "react";
 
 /* ============================================================
    デモの操作卓。デモモードのときだけ全画面の下に出る。
@@ -18,12 +19,34 @@ const MAX_MIN = 25 * 60;
 export function DemoBar() {
   const d = demo.use();
   const w = weather.use();
+  const ref = useRef<HTMLDivElement>(null);
+
+  /* 操作卓の高さは、チップの折り返しで変わる。
+     実測して --demobar-h に入れ、本文の下余白をそれに合わせる。
+     決め打ちにすると、狭い画面で割り込みが操作卓の裏に隠れる。 */
+  useEffect(() => {
+    const el = ref.current;
+    const root = document.documentElement;
+    if (!el || !d.enabled) {
+      root.style.setProperty("--demobar-h", "0px");
+      return;
+    }
+    const apply = () => root.style.setProperty("--demobar-h", `${Math.ceil(el.getBoundingClientRect().height) + 12}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.setProperty("--demobar-h", "0px");
+    };
+  }, [d.enabled]);
+
   if (!d.enabled) return null;
 
   const clock = d.clockMin ?? MIN_MIN;
 
   return (
-    <div className="demobar" role="region" aria-label="デモ操作">
+    <div className="demobar" role="region" aria-label="デモ操作" ref={ref}>
       <div className="demobar__row">
         <button
           className="demobar__play"

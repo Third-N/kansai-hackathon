@@ -465,8 +465,8 @@ html, body {
   --round-1: 3px;
   --round-2: 10px;
   --round-3: 16px;
-  /* デモ操作卓の高さ。本文の下余白がこれに合わせて伸びる */
-  --demobar-h: 92px;
+  /* デモ操作卓の高さ。DemoBar が実測して上書きする */
+  --demobar-h: 0px;
 }
 
 /* ---------- 地図 ---------- */
@@ -574,8 +574,8 @@ html, body {
   border: 0; font-family: var(--dot); font-size: 11px; cursor: pointer; text-decoration: underline;
 }
 
-/* 操作卓の下に本文が隠れないように */
-body:has(.demobar) .shell { padding-bottom: var(--demobar-h); }
+/* 操作卓の下に本文が隠れないように。高さは DemoBar が実測して入れる */
+.shell { padding-bottom: var(--demobar-h); }
 
 /* ---------- 見た目の一覧（/style）。本番の画面では使わない ---------- */
 
