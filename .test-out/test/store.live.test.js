@@ -1,0 +1,58 @@
+import { describe, it } from "node:test";
+import { runStoreContract } from "./store.contract";
+import { createSupabaseStore } from "../lib/store.supabase";
+import { clearMemoryStorage } from "../lib/storage";
+/* ============================================================
+   本物の Supabase に対して、同じ契約テストを流す。
+
+     DOCHU_LIVE_TEST=1 \
+     NEXT_PUBLIC_SUPABASE_URL=... \
+     NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
+     npm test
+
+   既定では走らない。うっかり本番のデータに書き込まないため。
+   PGlite で確かめられないのは Realtime の push だけなので、
+   実機で見るべきはそこ。落ちていてもポーリングで動くが、
+   一度は通しておきたい。
+   ============================================================ */
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const enabled = process.env.DOCHU_LIVE_TEST === "1" && !!url && !!key;
+if (!enabled) {
+    describe("TripStore / 実機の Supabase", () => {
+        it("環境変数が無いので飛ばす（DOCHU_LIVE_TEST=1 と URL/KEY を設定すると走る）", () => { });
+    });
+}
+else {
+    const { createClient } = await import("@supabase/supabase-js");
+    const client = createClient(url, key, {
+        auth: { persistSession: false },
+    });
+    runStoreContract({
+        label: "TripStore / 実機の Supabase",
+        async setup() {
+            // 実機は Realtime が効くので、ポーリングは既定のまま
+            return createSupabaseStore(client);
+        },
+        async reset() {
+            // anon では truncate できない。端末IDを変えて毎回まっさらな参加者として振る舞う
+            clearMemoryStorage();
+        },
+        /* 実機では他人の ID を名乗れない（それが匿名ログインを入れた目的）。
+           だから参加者ごとに別のセッションを起こし、その人自身に投票させる。
+           ここが通れば「なりすませないまま複数人のせーのが成立する」ことになる。 */
+        async join(trip, label = "テスト") {
+            const other = createClient(url, key, { auth: { persistSession: false } });
+            const { data, error } = await other.auth.signInAnonymously();
+            if (error || !data.user) {
+                throw new Error(`匿名ログインができません。Supabase の Authentication → Providers で有効にしてください: ${error?.message}`);
+            }
+            const id = data.user.id;
+            const otherStore = createSupabaseStore(Object.assign(other, { ensureSession: async () => id }));
+            const joined = await otherStore.joinByCode(trip.code, label);
+            if (!joined)
+                throw new Error("合流できませんでした");
+            return { id, vote: (roundId, opts) => otherStore.castVetoes(roundId, id, opts) };
+        },
+    });
+}
