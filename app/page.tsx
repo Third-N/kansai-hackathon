@@ -81,9 +81,15 @@ export default function HomePage() {
           <div className="masthead__line">京都</div>
           <div className="masthead__line">{jpDate()}</div>
           <div className="masthead__rule" />
-          <p className="masthead__promise">
-            このアプリは<br />1日に{CALLS_PER_DAY}回しか<br />あなたを呼びません。
-          </p>
+          <div className="promise">
+            <span className="promise__stamp" aria-hidden>
+              <span className="promise__stampn">{CALLS_PER_DAY}</span>
+              <span className="promise__stampu">回まで</span>
+            </span>
+            <p className="promise__text">
+              このアプリが<br />あなたを呼ぶのは<br /><b>1日に{CALLS_PER_DAY}回</b>だけです。
+            </p>
+          </div>
         </div>
       </header>
 
