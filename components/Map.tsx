@@ -72,6 +72,8 @@ export function Map({
     <div className="map">
       <svg
         viewBox={`0 0 ${W} ${height}`}
+        width={W}
+        height={height}
         role="img"
         aria-label={`道程の地図。${points.map((s) => s.name).join("、")}`}
       >

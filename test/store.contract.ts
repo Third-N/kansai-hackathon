@@ -202,14 +202,27 @@ export function runStoreContract(h: Harness): void {
       await b.vote(r.id, []);
       assert.equal((await store.getRound(r.id))!.submittedCount, 2);
 
-      // 出し直しても人数は増えない
-      await a.vote(r.id, ["opt2", "opt3"]);
+      // 出し直しても人数は増えない（4択の上限は1つなので出し直しも1つまで）
+      await a.vote(r.id, ["opt2"]);
       assert.equal((await store.getRound(r.id))!.submittedCount, 2);
 
       const round = (await store.getRound(r.id))! as Round & Record<string, unknown>;
       const dump = JSON.stringify(round);
       assert.ok(!dump.includes(a.id), "誰が出したかが round に混ざっている");
       assert.equal(round.result, null, "開示前に結果が見えている");
+    });
+
+    it("反対の上限はUIだけでなくここでも守られる", async () => {
+      const t = await store.createTrip("party", PLAN, 630);
+      const a = await h.join(t);
+      const r = await store.openRound(t.id, "どうする", OPTIONS, {}, 60);
+
+      // 4択の上限（vetoCap）は1つ。2つ以上は弾かれる
+      await assert.rejects(a.vote(r.id, ["opt1", "opt2"]));
+      assert.equal((await store.getRound(r.id))!.submittedCount, 0, "上限超えの投票が通ってしまった");
+
+      await a.vote(r.id, ["opt1"]);
+      assert.equal((await store.getRound(r.id))!.submittedCount, 1);
     });
 
     it("開示時刻より前の開示は何もしない", async () => {
@@ -243,10 +256,13 @@ export function runStoreContract(h: Harness): void {
 
     it("全滅したら、反対の最も少ないものを妥協点として出す", async () => {
       const t = await store.createTrip("party", PLAN, 630);
-      const [a, b] = [await h.join(t), await h.join(t)];
+      // 4択の上限は1人1つ。全部に反対をつけるには選択肢の数だけ人が要る
+      const [a, b, c, d] = [await h.join(t), await h.join(t), await h.join(t), await h.join(t)];
       const r = await store.openRound(t.id, "どうする", OPTIONS, {}, 0.3);
-      await a.vote(r.id, ["opt1", "opt2", "opt3"]);
-      await b.vote(r.id, ["opt2", "opt3", "opt4"]);
+      await a.vote(r.id, ["opt1"]);
+      await b.vote(r.id, ["opt2"]);
+      await c.vote(r.id, ["opt3"]);
+      await d.vote(r.id, ["opt4"]);
       await sleep(500);
 
       const done = await store.reveal(r.id);

@@ -156,7 +156,7 @@ export default function HostPage({ params }: { params: Promise<{ id: string }> }
               );
             })}
           </ul>
-          <p className="host__verdict">
+          <p className={`host__verdict host__verdict--${round.result!.kind}`}>
             {round.result!.kind === "compromise"
               ? "全部に誰かが反対しました。いちばん反対が少ないものにします"
               : round.result!.kind === "tied"

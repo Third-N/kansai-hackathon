@@ -8,6 +8,7 @@ import { Map } from "@/components/Map";
 import { SPOTS, TRAVEL_TABLE } from "@/lib/spots";
 import { simulate } from "@/lib/model";
 import { hhmm } from "@/lib/format";
+import { CALLS_PER_DAY } from "@/lib/store";
 import type { PlanItem } from "@/lib/types";
 
 /* ============================================================
@@ -184,6 +185,62 @@ export default function StylePage() {
           <span className="opt__sub">着地 体力58 ・ 気分52</span>
         </li>
       </ul>
+
+      {/* ---------- せーの：開示後（3つの結果） ---------- */}
+      <div className="sec"><span>せーの：開示後</span></div>
+      <ul className="opts">
+        <li className="opt is-winner">
+          <div className="opt__body">
+            <b className="opt__label">順番を入れ替える</b>
+            <i className="opt__sub">着地 体力42 ・ 気分51</i>
+          </div>
+          <span className="opt__count">反対なし</span>
+        </li>
+        <li className="opt is-struck">
+          <div className="opt__body">
+            <b className="opt__label">清水寺をあきらめる</b>
+            <i className="opt__sub">着地 体力58 ・ 気分52</i>
+          </div>
+          <span className="opt__count">嫌 2</span>
+        </li>
+        <li className="opt is-clear">
+          <div className="opt__body">
+            <b className="opt__label">休憩を挟む</b>
+            <i className="opt__sub">着地 体力49 ・ 気分60</i>
+          </div>
+          <span className="opt__count">反対なし</span>
+        </li>
+      </ul>
+
+      <div className="sg__row" style={{ marginTop: "var(--gap-3)", flexWrap: "wrap" }}>
+        <div className="verdict verdict--unanimous" style={{ flex: "1 1 160px" }}>
+          <div className="verdict__eyebrow">決まりました</div>
+          <p className="verdict__label">反対ゼロ</p>
+          <p className="verdict__sub">unanimous</p>
+        </div>
+        <div className="verdict" style={{ flex: "1 1 160px" }}>
+          <div className="verdict__eyebrow">決まりました</div>
+          <p className="verdict__label">1つに絞れた</p>
+          <p className="verdict__sub">tied</p>
+        </div>
+        <div className="verdict verdict--compromise" style={{ flex: "1 1 160px" }}>
+          <div className="verdict__eyebrow">妥協点</div>
+          <p className="verdict__label">全滅した</p>
+          <p className="verdict__sub">compromise</p>
+        </div>
+      </div>
+
+      {/* ---------- 約束（1日5回） ---------- */}
+      <div className="sec" style={{ marginTop: "var(--gap-4)" }}><span>約束（1日5回）</span></div>
+      <div className="promise">
+        <span className="promise__stamp" aria-hidden>
+          <span className="promise__stampn">{CALLS_PER_DAY}</span>
+          <span className="promise__stampu">回まで</span>
+        </span>
+        <p className="promise__text">
+          このアプリが<br />あなたを呼ぶのは<br /><b>1日に{CALLS_PER_DAY}回</b>だけです。
+        </p>
+      </div>
 
       <p className="anon" style={{ marginTop: "var(--gap-4)" }}>
         ここに無い状態を足したくなったら、このファイルに1ブロック書き足してください。

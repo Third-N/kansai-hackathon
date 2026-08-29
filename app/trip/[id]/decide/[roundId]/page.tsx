@@ -64,6 +64,9 @@ export default function DecidePage({
     const winner = round.options.find((o) => o.id === result.winnerId)!;
     return (
       <div className="view">
+        {/* 開示の合図。この return がマウントされる瞬間に一度だけ光って消える */}
+        <div className="seenoflash" aria-hidden />
+
         <div className="seeno__head">
           <span className="seeno__title">せーの</span>
           <span className="seeno__note">
@@ -73,14 +76,15 @@ export default function DecidePage({
           </span>
         </div>
 
-        <ul className="opts">
-          {round.options.map((o) => {
+        <ul className="opts opts--revealed">
+          {round.options.map((o, i) => {
             const count = result.tally.find((t) => t.optionId === o.id)?.count ?? 0;
             const isWinner = o.id === result.winnerId;
             return (
               <li
                 key={o.id}
                 className={`opt ${isWinner ? "is-winner" : count > 0 ? "is-struck" : "is-clear"}`}
+                style={{ animationDelay: `${i * 90}ms` }}
               >
                 <div className="opt__body">
                   <b className="opt__label">{o.label}</b>
@@ -94,7 +98,10 @@ export default function DecidePage({
           })}
         </ul>
 
-        <div className="verdict">
+        <div
+          className={`verdict verdict--${result.kind}`}
+          style={{ animationDelay: `${round.options.length * 90 + 120}ms` }}
+        >
           <div className="verdict__eyebrow">
             {result.kind === "compromise" ? "妥協点" : "決まりました"}
           </div>

@@ -1,5 +1,4 @@
 import { hhmm } from "./format";
-import { crowdAt } from "./model";
 /** 体力が尽きる区間のスポット名 */
 export function collapseSpotName(result, spots) {
     if (result.collapseMin === null)
@@ -54,10 +53,13 @@ export function interruptCopy(current, revision, spots, mode) {
         const after = revision.result.timeline.find((g) => g.type === "stay" && g.spotId === movedLater);
         const before = current.timeline.find((g) => g.type === "stay" && g.spotId === movedLater);
         if (after) {
-            const cAfter = crowdAt(s, after.startMin);
-            const cBefore = before ? crowdAt(s, before.startMin) : null;
+            // 混雑は simulate() がその旅程の dayType で計算済みの値をそのまま使う。
+            // ここで crowdAt を引数無しで呼び直すと平日テーブルに固定されてしまい、
+            // 土日祝の旅程で実際の値と食い違う
+            const cAfter = after.crowd;
+            const cBefore = before ? before.crowd : null;
             // 実際に空く場合だけ混雑を持ち出す。変わらないなら時刻だけ言う
-            if (cBefore !== null && cAfter < cBefore - 0.1) {
+            if (cBefore !== null && cAfter !== null && cAfter < cBefore - 0.1) {
                 parts.push(`${s.name}を${hhmm(after.startMin)}にずらすと、混雑が${Math.round(cBefore * 100)}%から${Math.round(cAfter * 100)}%まで下がります`);
             }
             else {
