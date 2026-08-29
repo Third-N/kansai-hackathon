@@ -15,8 +15,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ja">
-      <body>
+    <html lang="ja" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <div className="shell">{children}</div>
         <DemoBar />
       </body>
