@@ -65,6 +65,12 @@ export interface Channel {
 }
 
 export interface SupabaseLike {
+  /**
+   * この端末のセッションを用意し、その ID を返す。
+   * Supabase の匿名ログインが有効なら auth のユーザーID、
+   * 無効（またはテスト）なら null。null のときは端末が自分で作った ID を使う。
+   */
+  ensureSession(): Promise<string | null>;
   from<T = Row>(table: string): Table<T>;
   rpc<T = unknown>(fn: string, args?: Row): PromiseLike<One<T>>;
   channel(name: string): Channel;

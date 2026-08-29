@@ -14,15 +14,29 @@ import type { Member, PlanItem, Round, RoundOption, Trip, TripMode } from "./typ
 /** 1日に呼び出せる回数。企画の「1日5回しか呼びません」 */
 export const CALL_BUDGET = 5;
 
+/** 待合の定員。README の「デモの本番は5〜7人で」に対する上限側の歯止め */
+export const ROOM_CAPACITY = 12;
+
+/** 部屋の寿命（分）。過ぎたら閉じ、あいことばが次の組に回る */
+export const ROOM_TTL_MINUTES = 720;
+
 export interface TripStore {
+  /**
+   * この端末の参加者ID。
+   * Supabase で匿名ログインが有効なときは auth のユーザーIDになるので、
+   * 画面側が localStorage から自前で作ってはいけない。
+   */
+  currentMemberId(): Promise<string>;
   getActiveTrip(): Promise<Trip | null>;
   getTrip(id: string): Promise<Trip | null>;
   getLastFinished(): Promise<Trip | null>;
   createTrip(mode: TripMode, plan: PlanItem[], startMin: number): Promise<Trip>;
   updatePlan(id: string, plan: PlanItem[]): Promise<Trip>;
   consumeCall(id: string): Promise<Trip>;
-  /** 道中を終える。これを呼ばないと getLastFinished が永久に空になる */
+  /** 道中を終える。これを呼ばないと getLastFinished が永久に空になる。幹事だけ */
   finishTrip(id: string): Promise<Trip>;
+  /** 待合を閉じる／開ける。幹事だけ。閉じると新しい人は入れない */
+  setRoomLocked(id: string, locked: boolean): Promise<Trip>;
   joinByCode(code: string, label: string): Promise<Trip | null>;
   /** パーティの参加者更新を購読する。B が Realtime に置き換える */
   subscribeMembers(id: string, cb: (members: Member[]) => void): () => void;

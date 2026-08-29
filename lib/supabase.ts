@@ -24,14 +24,34 @@ export function getSupabaseClient(): SupabaseLike | null {
     cached = null;
     return cached;
   }
+  const client = createClient(url, key, {
+    // 端末ごとに1つのセッションを持ち続ける。member_id がこれになる
+    auth: { persistSession: true, autoRefreshToken: true },
+    realtime: { params: { eventsPerSecond: 5 } },
+  });
+
+  let session: Promise<string | null> | null = null;
+
+  const ensureSession = async (): Promise<string | null> => {
+    const { data } = await client.auth.getUser();
+    if (data.user) return data.user.id;
+    const { data: signed, error } = await client.auth.signInAnonymously();
+    if (error || !signed.user) {
+      // 匿名ログインが無効なプロジェクト。名乗った ID で動く構成に落ちる。
+      // あいことばを知っている人だけが入れる、以上の保証は無くなる
+      console.warn("[dochu] 匿名ログインが使えません。なりすまし防止は効きません:", error?.message);
+      return null;
+    }
+    return signed.user.id;
+  };
+
   // ここが唯一のキャスト。SupabaseLike は本物のクライアントのうち
   // 実際に使うメソッドだけを写した型で、構造としては満たされている。
   // 一枚挟んでいるおかげで、テストは PGlite に同じ形をかぶせて
   // 本物の SQL を走らせられる。
-  cached = createClient(url, key, {
-    auth: { persistSession: false },
-    realtime: { params: { eventsPerSecond: 5 } },
-  }) as unknown as SupabaseLike;
+  cached = Object.assign(client as unknown as SupabaseLike, {
+    ensureSession: () => (session ??= ensureSession()),
+  });
   return cached;
 }
 

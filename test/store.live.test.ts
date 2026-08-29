@@ -42,5 +42,24 @@ if (!enabled) {
       // anon では truncate できない。端末IDを変えて毎回まっさらな参加者として振る舞う
       clearMemoryStorage();
     },
+    /* 実機では他人の ID を名乗れない（それが匿名ログインを入れた目的）。
+       だから参加者ごとに別のセッションを起こし、その人自身に投票させる。
+       ここが通れば「なりすませないまま複数人のせーのが成立する」ことになる。 */
+    async join(trip, label = "テスト") {
+      const other = createClient(url!, key!, { auth: { persistSession: false } });
+      const { data, error } = await other.auth.signInAnonymously();
+      if (error || !data.user) {
+        throw new Error(
+          `匿名ログインができません。Supabase の Authentication → Providers で有効にしてください: ${error?.message}`
+        );
+      }
+      const id = data.user.id;
+      const otherStore = createSupabaseStore(
+        Object.assign(other as unknown as SupabaseLike, { ensureSession: async () => id })
+      );
+      const joined = await otherStore.joinByCode(trip.code!, label);
+      if (!joined) throw new Error("合流できませんでした");
+      return { id, vote: (roundId: string, opts: string[]) => otherStore.castVetoes(roundId, id, opts) };
+    },
   });
 }

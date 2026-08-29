@@ -51,6 +51,10 @@ export interface Trip {
   /** 今日すでに呼び出した回数 */
   callsUsed: number;
   status: "planning" | "running" | "done";
+  /** 待合を閉じたか。閉じると新しい人は入れない */
+  locked?: boolean;
+  /** 部屋の寿命。過ぎたら閉じ、あいことばが解放される */
+  expiresAt?: string;
 }
 
 export interface Segment {

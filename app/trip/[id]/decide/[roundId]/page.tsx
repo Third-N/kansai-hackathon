@@ -6,17 +6,6 @@ import { store } from "@/lib/store";
 import { secondsUntil, vetoCap } from "@/lib/round";
 import type { Round } from "@/lib/types";
 
-const MEMBER_KEY = "dochu:me";
-
-function myId(): string {
-  let id = window.localStorage.getItem(MEMBER_KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    window.localStorage.setItem(MEMBER_KEY, id);
-  }
-  return id;
-}
-
 export default function DecidePage({
   params,
 }: {
@@ -65,7 +54,7 @@ export default function DecidePage({
   };
 
   const submit = async () => {
-    await store.castVetoes(roundId, myId(), picked);
+    await store.castVetoes(roundId, await store.currentMemberId(), picked);
     setSubmitted(true);
   };
 

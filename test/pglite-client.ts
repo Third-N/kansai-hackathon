@@ -134,18 +134,27 @@ const noopChannel: Channel = {
 export interface PgliteBackend extends SupabaseLike {
   /** 直に SQL を打つ。テストの中で「本来クライアントから見えないもの」を確かめるのに使う */
   raw: PGlite;
+  /** 匿名ログインが有効な状態を再現する。null でセッション無しに戻す */
+  actAs(memberId: string | null): Promise<void>;
   close(): Promise<void>;
 }
 
 export async function createPgliteBackend(migrationsDir = "supabase/migrations"): Promise<PgliteBackend> {
   const db = await new PGlite();
 
-  // Supabase には既にあるロール。ここでは自分で作る
+  // Supabase には既にあるもの。ここでは自分で作る。
+  // auth.uid() は本物では JWT から来るが、テストでは GUC から読む。
+  // これで「匿名ログインを有効にした構成」と「していない構成」の両方を試せる
   await db.exec(`
     do $$ begin
       if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
       if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
     end $$;
+    create schema if not exists auth;
+    create or replace function auth.uid() returns uuid
+    language sql stable as $$ select nullif(current_setting('app.member_id', true), '')::uuid $$;
+    grant usage on schema auth to anon, authenticated;
+    grant execute on function auth.uid() to anon, authenticated;
   `);
 
   const files = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort();
@@ -153,8 +162,17 @@ export async function createPgliteBackend(migrationsDir = "supabase/migrations")
     await db.exec(readFileSync(join(migrationsDir, f), "utf8"));
   }
 
+  let acting: string | null = null;
+
   return {
     raw: db,
+    async actAs(memberId) {
+      acting = memberId;
+      await db.query("select set_config('app.member_id', $1, false)", [memberId ?? ""] as never[]);
+    },
+    async ensureSession() {
+      return acting;
+    },
     from<T = Row>(table: string): Table<T> {
       return {
         select: () => new Q<T>(db, table, "select") as unknown as Filter<T>,

@@ -1,7 +1,7 @@
 "use client";
 import type { Member, Round, Trip } from "./types";
 import type { TripStore } from "./store-contract";
-import { CALL_BUDGET } from "./store-contract";
+import { CALL_BUDGET, ROOM_CAPACITY, ROOM_TTL_MINUTES } from "./store-contract";
 import { resolveRound, roundTiebreak } from "./round";
 import { myMemberId } from "./identity";
 import { isoDate } from "./format";
@@ -33,11 +33,35 @@ function write(trips: Trip[]) {
 
 function uniqueCode(existing: Trip[]): string {
   const used = new Set(existing.filter((t) => t.status !== "done").map((t) => t.code));
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 60; i++) {
     const c = makeCode();
     if (!used.has(c)) return c;
   }
-  return makeCode();
+  throw new Error("あいことばが取れませんでした");
+}
+
+const expired = (t: Trip): boolean =>
+  !!t.expiresAt && new Date(t.expiresAt).getTime() <= Date.now();
+
+/** 寿命の切れた部屋を閉じる。閉じるとあいことばが解放される。
+    Supabase 側の close_expired_rooms() と同じ役割 */
+function closeExpired(trips: Trip[]): Trip[] {
+  let changed = false;
+  const next = trips.map((t) => {
+    if (t.status !== "done" && expired(t)) {
+      changed = true;
+      return { ...t, status: "done" as const };
+    }
+    return t;
+  });
+  if (changed) write(next);
+  return next;
+}
+
+function mustHost(trip: Trip, who: string): void {
+  if (!trip.members.some((m) => m.id === who && m.isHost)) {
+    throw new Error("幹事だけができます");
+  }
 }
 
 
@@ -67,8 +91,20 @@ function readVetoes(): StoredVeto[] {
 function writeVetoes(vs: StoredVeto[]) { storage().setItem(VKEY, JSON.stringify(vs)); }
 
 export const localStore: TripStore = {
+  async currentMemberId() {
+    return myMemberId();
+  },
+
   async getActiveTrip() {
-    return read().find((t) => t.status === "running" && t.date === isoDate()) ?? null;
+    const me = myMemberId();
+    return (
+      closeExpired(read()).find(
+        (t) =>
+          t.status === "running" &&
+          t.date === isoDate() &&
+          t.members.some((m) => m.id === me)
+      ) ?? null
+    );
   },
 
   async getTrip(id) {
@@ -76,12 +112,15 @@ export const localStore: TripStore = {
   },
 
   async getLastFinished() {
-    const done = read().filter((t) => t.status === "done");
+    const me = myMemberId();
+    const done = closeExpired(read()).filter(
+      (t) => t.status === "done" && t.members.some((m) => m.id === me)
+    );
     return done.sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
   },
 
   async createTrip(mode, plan, startMin) {
-    const trips = read();
+    const trips = closeExpired(read());
     const trip: Trip = {
       id: crypto.randomUUID(),
       mode,
@@ -92,6 +131,8 @@ export const localStore: TripStore = {
       members: [{ id: myMemberId(), label: "あなた", isHost: true, staminaFactor: 1 }],
       callsUsed: 0,
       status: "running",
+      locked: false,
+      expiresAt: new Date(Date.now() + ROOM_TTL_MINUTES * 60_000).toISOString(),
     };
     write([...trips, trip]);
     return trip;
@@ -119,22 +160,43 @@ export const localStore: TripStore = {
     const trips = read();
     const i = trips.findIndex((t) => t.id === id);
     if (i < 0) throw new Error("trip not found");
+    mustHost(trips[i], myMemberId());
     trips[i] = { ...trips[i], status: "done" };
     write(trips);
     return trips[i];
   },
 
-  async joinByCode(c, label) {
+  async setRoomLocked(id, locked) {
     const trips = read();
-    const i = trips.findIndex((t) => t.code === c && t.status !== "done");
+    const i = trips.findIndex((t) => t.id === id);
+    if (i < 0) throw new Error("trip not found");
+    mustHost(trips[i], myMemberId());
+    trips[i] = { ...trips[i], locked };
+    write(trips);
+    return trips[i];
+  },
+
+  async joinByCode(c, label) {
+    const trips = closeExpired(read());
+    const i = trips.findIndex(
+      (t) => t.code === c && t.mode === "party" && t.status !== "done" && !expired(t)
+    );
     if (i < 0) return null;
-    // 同じ端末が二度入っても増やさない。Supabase 実装の on conflict と揃える
+
+    // すでに入っている端末。開き直しただけなので名前は触らない
     const me = myMemberId();
-    const already = trips[i].members.some((m) => m.id === me);
-    const member: Member = { id: me, label, isHost: false, staminaFactor: 1 };
-    trips[i] = already
-      ? { ...trips[i], members: trips[i].members.map((m) => (m.id === me ? { ...m, label } : m)) }
-      : { ...trips[i], members: [...trips[i].members, member] };
+    if (trips[i].members.some((m) => m.id === me)) return trips[i];
+
+    if (trips[i].locked) throw new Error("この待合はもう閉じています");
+    if (trips[i].members.length >= ROOM_CAPACITY) throw new Error("この待合はいっぱいです");
+
+    const member: Member = {
+      id: me,
+      label: (label ?? "").trim().slice(0, 24) || "旅人",
+      isHost: false,
+      staminaFactor: 1,
+    };
+    trips[i] = { ...trips[i], members: [...trips[i].members, member] };
     write(trips);
     return trips[i];
   },

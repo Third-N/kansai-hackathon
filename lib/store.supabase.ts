@@ -1,11 +1,9 @@
 "use client";
 import type { Member, PlanItem, Round, RoundOption, RoundResult, Trip, TripMode } from "./types";
 import type { TripStore } from "./store-contract";
-import { CALL_BUDGET } from "./store-contract";
+import { CALL_BUDGET, ROOM_CAPACITY, ROOM_TTL_MINUTES } from "./store-contract";
 import type { Channel, Row, SupabaseLike } from "./supabase-like";
-import { UNIQUE_VIOLATION } from "./supabase-like";
 import { myMemberId } from "./identity";
-import { makeCode } from "./code";
 import { isoDate } from "./format";
 
 /* ============================================================
@@ -32,6 +30,8 @@ interface TripRow {
   plan: PlanItem[];
   calls_used: number;
   status: Trip["status"];
+  locked: boolean | null;
+  expires_at: string | null;
 }
 
 interface MemberRow {
@@ -84,6 +84,8 @@ function toTrip(r: TripRow, members: Member[]): Trip {
     members,
     callsUsed: Number(r.calls_used),
     status: r.status,
+    locked: r.locked ?? false,
+    expiresAt: r.expires_at ? asIso(r.expires_at) : undefined,
   };
 }
 
@@ -117,6 +119,16 @@ export function createSupabaseStore(sb: SupabaseLike, opts: SupabaseStoreOptions
     throw new Error(`${where}: ${e?.message ?? "unknown error"}`);
   };
 
+  /* この端末の参加者ID。匿名ログインが有効なら auth のユーザーID。
+     無効なら端末が自分で作った ID に落ちる（なりすまし防止は効かない）。
+     一度決まったら使い回す */
+  let memberIdCache: Promise<string> | null = null;
+  const memberId = (): Promise<string> =>
+    (memberIdCache ??= sb
+      .ensureSession()
+      .then((uid) => uid ?? myMemberId())
+      .catch(() => myMemberId()));
+
   async function fetchMembers(tripId: string): Promise<Member[]> {
     const res = await sb
       .from<MemberRow>("members")
@@ -134,7 +146,7 @@ export function createSupabaseStore(sb: SupabaseLike, opts: SupabaseStoreOptions
 
   /** この端末が入っている道中の id。ログインが無いので members が身元になる */
   async function myTripIds(): Promise<string[]> {
-    const res = await sb.from<MemberRow>("members").select("*").eq("id", myMemberId());
+    const res = await sb.from<MemberRow>("members").select("*").eq("id", await memberId());
     if (res.error) fail("参加中の道中の取得", res.error);
     return (res.data ?? []).map((r) => r.trip_id);
   }
@@ -197,6 +209,10 @@ export function createSupabaseStore(sb: SupabaseLike, opts: SupabaseStoreOptions
   }
 
   const api: TripStore = {
+    async currentMemberId() {
+      return memberId();
+    },
+
     async getActiveTrip() {
       const ids = await myTripIds();
       if (ids.length === 0) return null;
@@ -232,72 +248,57 @@ export function createSupabaseStore(sb: SupabaseLike, opts: SupabaseStoreOptions
     },
 
     async createTrip(mode, plan, startMin) {
-      // あいことばが衝突したら取り直す。unique 制約が唯一の判定
-      let row: TripRow | null = null;
-      for (let attempt = 0; attempt < 8 && !row; attempt++) {
-        const res = await sb
-          .from<TripRow>("trips")
-          .insert({
-            mode,
-            code: mode === "party" ? makeCode() : null,
-            date: isoDate(),
-            start_min: startMin,
-            plan: plan as unknown as Row[],
-            calls_used: 0,
-            status: "running",
-          })
-          .select()
-          .single();
-        if (!res.error) {
-          row = res.data;
-          break;
-        }
-        if (res.error.code !== UNIQUE_VIOLATION) fail("道中の作成", res.error);
-      }
-      if (!row) throw new Error("あいことばが取れませんでした。もう一度お試しください");
-
-      const me = await sb
-        .from<MemberRow>("members")
-        .insert({
-          id: myMemberId(),
-          trip_id: row.id,
-          label: "あなた",
-          is_host: true,
-          stamina_factor: 1,
-        })
-        .select()
-        .single();
-      if (me.error) fail("参加者の登録", me.error);
-
-      return toTrip(row, [toMember(me.data as MemberRow)]);
+      // あいことばの採番と取り直しはサーバーの中。
+      // クライアントに「何回か試して駄目なら諦める」を持たせない
+      const res = await sb.rpc<TripRow>("create_trip", {
+        p_mode: mode,
+        p_plan: plan as unknown as Row[],
+        p_start_min: startMin,
+        p_member_id: await memberId(),
+        p_label: "あなた",
+        p_ttl_minutes: ROOM_TTL_MINUTES,
+      });
+      if (res.error) fail("道中の作成", res.error);
+      return (await withMembers(res.data))!;
     },
 
     async updatePlan(id, plan) {
-      const res = await sb
-        .from<TripRow>("trips")
-        .update({ plan: plan as unknown as Row[] })
-        .eq("id", id)
-        .select()
-        .single();
+      const res = await sb.rpc<TripRow>("update_plan", {
+        p_trip_id: id,
+        p_plan: plan as unknown as Row[],
+        p_member_id: await memberId(),
+      });
       if (res.error) fail("道程の更新", res.error);
       return (await withMembers(res.data))!;
     },
 
     async consumeCall(id) {
       // 読んで足して書くとぶつかる。加算は RPC の中で原子的に行う
-      const res = await sb.rpc<TripRow>("consume_call", { p_trip_id: id, p_cap: CALL_BUDGET });
+      const res = await sb.rpc<TripRow>("consume_call", {
+        p_trip_id: id,
+        p_member_id: await memberId(),
+        p_cap: CALL_BUDGET,
+      });
       if (res.error) fail("呼び出し回数の加算", res.error);
       return (await withMembers(res.data))!;
     },
 
     async finishTrip(id) {
-      const res = await sb
-        .from<TripRow>("trips")
-        .update({ status: "done" })
-        .eq("id", id)
-        .select()
-        .single();
+      const res = await sb.rpc<TripRow>("finish_trip", {
+        p_trip_id: id,
+        p_member_id: await memberId(),
+      });
       if (res.error) fail("道中を終える", res.error);
+      return (await withMembers(res.data))!;
+    },
+
+    async setRoomLocked(id, locked) {
+      const res = await sb.rpc<TripRow>("set_room_locked", {
+        p_trip_id: id,
+        p_member_id: await memberId(),
+        p_locked: locked,
+      });
+      if (res.error) fail("待合の開け閉め", res.error);
       return (await withMembers(res.data))!;
     },
 
@@ -305,7 +306,8 @@ export function createSupabaseStore(sb: SupabaseLike, opts: SupabaseStoreOptions
       const res = await sb.rpc<TripRow | null>("join_by_code", {
         p_code: c,
         p_label: label,
-        p_member_id: myMemberId(),
+        p_member_id: await memberId(),
+        p_max: ROOM_CAPACITY,
       });
       if (res.error) fail("合流", res.error);
       return withMembers(res.data ?? null);
@@ -325,6 +327,7 @@ export function createSupabaseStore(sb: SupabaseLike, opts: SupabaseStoreOptions
         p_options: options as unknown as Row[],
         p_plan_by_option: planByOption as unknown as Row,
         p_seconds: seconds,
+        p_member_id: await memberId(),
       });
       if (res.error) fail("せーのの開始", res.error);
       return toRound(res.data as RoundRow);

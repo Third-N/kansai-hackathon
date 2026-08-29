@@ -2,7 +2,12 @@ import { describe, it, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import type { TripStore } from "../lib/store-contract";
 import { CALL_BUDGET } from "../lib/store-contract";
-import type { Member, PlanItem, Round, RoundOption } from "../lib/types";
+import type { Member, PlanItem, Round, RoundOption, Trip } from "../lib/types";
+
+export interface Participant {
+  id: string;
+  vote(roundId: string, optionIds: string[]): Promise<void>;
+}
 
 /* ============================================================
    実装ごとに変わってはいけない約束。
@@ -16,6 +21,14 @@ export interface Harness {
   setup(): Promise<TripStore>;
   /** 各テストの前に呼ぶ。データと端末IDを白紙に戻す */
   reset(): Promise<void>;
+  /**
+   * もう1人を道中に入れ、その人として投票できる手を返す。
+   * TripStore からは「自分が入る」ことしかできないので、
+   * 複数人の「せーの」を作るにはここが要る。
+   * 本番の Supabase では他人の ID を名乗れないので、
+   * 実装ごとに手段が違う（ローカルは直に足す、実機は別セッションを起こす）。
+   */
+  join(trip: Trip, label?: string): Promise<Participant>;
   teardown?(): Promise<void>;
 }
 
@@ -32,9 +45,6 @@ const OPTIONS: RoundOption[] = [
 ];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** 参加者ID。端末が crypto.randomUUID() で作るものなので、テストも UUID を使う */
-const mid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 async function waitFor<T>(fn: () => Promise<T | null>, ms = 4000): Promise<T> {
   const deadline = Date.now() + ms;
@@ -127,6 +137,36 @@ export function runStoreContract(h: Harness): void {
       assert.equal(got!.members.length, 1, "作成者と同じ端末なので1人のまま");
     });
 
+    it("待合を開き直しても、幹事の名前が上書きされない", async () => {
+      const t = await store.createTrip("party", PLAN, 630);
+      const before = t.members[0].label;
+      await store.joinByCode(t.code!, "旅人");
+      const after = (await store.getTrip(t.id))!.members.find((m) => m.isHost)!.label;
+      assert.equal(after, before, "待合を開き直すたびに名前が変わる");
+    });
+
+    it("部屋には寿命があり、作った直後は未来にある", async () => {
+      const t = await store.createTrip("party", PLAN, 630);
+      assert.ok(t.expiresAt, "寿命が入っていない");
+      assert.ok(new Date(t.expiresAt!).getTime() > Date.now(), "作った瞬間に切れている");
+      assert.equal(t.locked, false);
+    });
+
+    it("幹事は待合を閉じられる", async () => {
+      const t = await store.createTrip("party", PLAN, 630);
+      const locked = await store.setRoomLocked(t.id, true);
+      assert.equal(locked.locked, true);
+      assert.equal((await store.getTrip(t.id))!.locked, true);
+      assert.equal((await store.setRoomLocked(t.id, false)).locked, false);
+    });
+
+    it("この端末の参加者IDが取れて、幹事として入っている", async () => {
+      const me = await store.currentMemberId();
+      assert.match(me, /^[0-9a-f-]{36}$/i);
+      const t = await store.createTrip("solo", PLAN, 630);
+      assert.equal(t.members[0].id, me);
+    });
+
     it("参加者の購読が現在の顔ぶれを返す", async () => {
       const t = await store.createTrip("party", PLAN, 630);
       let seen: Member[] = [];
@@ -152,22 +192,23 @@ export function runStoreContract(h: Harness): void {
 
     it("提出した人数は数えるが、誰が何を嫌がったかは返さない", async () => {
       const t = await store.createTrip("party", PLAN, 630);
+      const [a, b] = [await h.join(t), await h.join(t)];
       const r = await store.openRound(t.id, "どうする", OPTIONS, {}, 60);
 
-      await store.castVetoes(r.id, mid(1), ["opt1"]);
+      await a.vote(r.id, ["opt1"]);
       assert.equal((await store.getRound(r.id))!.submittedCount, 1);
 
       // 何も嫌でない人も「出した」に数える
-      await store.castVetoes(r.id, mid(2), []);
+      await b.vote(r.id, []);
       assert.equal((await store.getRound(r.id))!.submittedCount, 2);
 
       // 出し直しても人数は増えない
-      await store.castVetoes(r.id, mid(1), ["opt2", "opt3"]);
+      await a.vote(r.id, ["opt2", "opt3"]);
       assert.equal((await store.getRound(r.id))!.submittedCount, 2);
 
       const round = (await store.getRound(r.id))! as Round & Record<string, unknown>;
       const dump = JSON.stringify(round);
-      assert.ok(!dump.includes(mid(1)), "誰が出したかが round に混ざっている");
+      assert.ok(!dump.includes(a.id), "誰が出したかが round に混ざっている");
       assert.equal(round.result, null, "開示前に結果が見えている");
     });
 
@@ -181,10 +222,11 @@ export function runStoreContract(h: Harness): void {
 
     it("反対ゼロが1つなら、それが通る", async () => {
       const t = await store.createTrip("party", PLAN, 630);
+      const [a, b, c] = [await h.join(t), await h.join(t), await h.join(t)];
       const r = await store.openRound(t.id, "どうする", OPTIONS, {}, 0.3);
-      await store.castVetoes(r.id, mid(1), ["opt1"]);
-      await store.castVetoes(r.id, mid(2), ["opt2"]);
-      await store.castVetoes(r.id, mid(3), ["opt3"]);
+      await a.vote(r.id, ["opt1"]);
+      await b.vote(r.id, ["opt2"]);
+      await c.vote(r.id, ["opt3"]);
       await sleep(500);
 
       const done = await store.reveal(r.id);
@@ -201,9 +243,10 @@ export function runStoreContract(h: Harness): void {
 
     it("全滅したら、反対の最も少ないものを妥協点として出す", async () => {
       const t = await store.createTrip("party", PLAN, 630);
+      const [a, b] = [await h.join(t), await h.join(t)];
       const r = await store.openRound(t.id, "どうする", OPTIONS, {}, 0.3);
-      await store.castVetoes(r.id, mid(1), ["opt1", "opt2", "opt3"]);
-      await store.castVetoes(r.id, mid(2), ["opt2", "opt3", "opt4"]);
+      await a.vote(r.id, ["opt1", "opt2", "opt3"]);
+      await b.vote(r.id, ["opt2", "opt3", "opt4"]);
       await sleep(500);
 
       const done = await store.reveal(r.id);
@@ -215,12 +258,13 @@ export function runStoreContract(h: Harness): void {
 
     it("開示は冪等。二度呼んでも結果が変わらず、開示後の票も入らない", async () => {
       const t = await store.createTrip("party", PLAN, 630);
+      const [a, b] = [await h.join(t), await h.join(t)];
       const r = await store.openRound(t.id, "どうする", OPTIONS, {}, 0.3);
-      await store.castVetoes(r.id, mid(1), ["opt1"]);
+      await a.vote(r.id, ["opt1"]);
       await sleep(500);
 
       const first = await store.reveal(r.id);
-      await store.castVetoes(r.id, mid(9), ["opt2", "opt3", "opt4"]);
+      await b.vote(r.id, ["opt2", "opt3", "opt4"]);
       const second = await store.reveal(r.id);
       assert.deepEqual(second.result, first.result, "二度目の開示で結果が変わった");
       assert.equal(second.status, "revealed");
@@ -228,8 +272,9 @@ export function runStoreContract(h: Harness): void {
 
     it("購読していれば、誰も押さなくても開示が届く", async () => {
       const t = await store.createTrip("party", PLAN, 630);
+      const a = await h.join(t);
       const r = await store.openRound(t.id, "どうする", OPTIONS, {}, 0.3);
-      await store.castVetoes(r.id, mid(1), ["opt1"]);
+      await a.vote(r.id, ["opt1"]);
 
       let latest: Round | null = null;
       const stop = store.subscribeRound(r.id, (x) => { latest = x; });

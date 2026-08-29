@@ -21,10 +21,16 @@ export function deferredStore(load: () => Promise<TripStore>): TripStore {
   ): (() => void) => {
     let stop: (() => void) | null = null;
     let cancelled = false;
-    void get().then((s) => {
-      if (cancelled) return;
-      stop = attach(s);
-    });
+    get()
+      .then((s) => {
+        if (cancelled) return;
+        stop = attach(s);
+      })
+      .catch((e) => {
+        // 握り潰すと「購読しているつもりで何も起きない」になる。
+        // 会場でいちばん困る壊れ方なので、必ず表に出す
+        console.error("[dochu] 実装の読み込みに失敗しました。購読は始まっていません", e);
+      });
     return () => {
       cancelled = true;
       stop?.();
@@ -33,6 +39,7 @@ export function deferredStore(load: () => Promise<TripStore>): TripStore {
   };
 
   return {
+    async currentMemberId() { return (await get()).currentMemberId(); },
     async getActiveTrip() { return (await get()).getActiveTrip(); },
     async getTrip(id) { return (await get()).getTrip(id); },
     async getLastFinished() { return (await get()).getLastFinished(); },
@@ -40,6 +47,7 @@ export function deferredStore(load: () => Promise<TripStore>): TripStore {
     async updatePlan(id, plan) { return (await get()).updatePlan(id, plan); },
     async consumeCall(id) { return (await get()).consumeCall(id); },
     async finishTrip(id) { return (await get()).finishTrip(id); },
+    async setRoomLocked(id, locked) { return (await get()).setRoomLocked(id, locked); },
     async joinByCode(code, label) { return (await get()).joinByCode(code, label); },
     subscribeMembers(id, cb: (m: Member[]) => void) {
       return subscribe((s) => s.subscribeMembers(id, cb));
