@@ -8,6 +8,7 @@ import { secondsUntil } from "@/lib/round";
 import { hhmm } from "@/lib/format";
 import { useClock } from "@/lib/useClock";
 import { weather, toEnvironment } from "@/lib/weather";
+import { useRealWeather } from "@/lib/useRealWeather";
 import { proposeRevision } from "@/lib/model";
 import { interruptCopy } from "@/lib/copy";
 import { REST_CANDIDATES } from "@/lib/spots";
@@ -21,6 +22,7 @@ import type { Round, Trip } from "@/lib/types";
 export default function HostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const nowMin = useClock(10_000);
+  useRealWeather();
   const w = weather.use();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [round, setRound] = useState<Round | null>(null);

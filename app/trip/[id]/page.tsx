@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { useClock } from "@/lib/useClock";
 import { useLocation } from "@/lib/useLocation";
 import { weather, toEnvironment } from "@/lib/weather";
+import { useRealWeather } from "@/lib/useRealWeather";
 import { Map } from "@/components/Map";
 import { hhmm, jpDate } from "@/lib/format";
 import type { Trip } from "@/lib/types";
@@ -21,6 +22,7 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
   const { id } = use(params);
   const router = useRouter();
   const nowMin = useClock();
+  useRealWeather();
   const w = weather.use();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loaded, setLoaded] = useState(false);
