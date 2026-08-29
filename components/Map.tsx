@@ -3,14 +3,15 @@ import { useMemo, useState } from "react";
 import type { PlanItem, Spot } from "@/lib/types";
 import type { Fix } from "@/lib/location";
 import { mercatorY, staticMapUrl } from "@/lib/static-map";
+import { setGeoapifyKey, useGeoapifyKey } from "@/lib/geoapify-config";
 
 /* ============================================================
    地図。企画書の「決定した瞬間に地図と所要時間を出す」。
 
-   Geoapify のキー（NEXT_PUBLIC_GEOAPIFY_KEY）が設定されていれば、
+   Geoapify のキーが（画面から入力されて）設定されていれば、
    実際の地図画像を背面に敷く。無ければ、外部タイルを読みに行かない
    点と線だけの図のまま動く（会場のWi-Fiが死んでも出る、という
-   もともとの作りを崩さないため）。
+   もともとの作りを崩さないため）。キーの入力欄もこのまま出す。
 
    マーカーと経路線は今まで通り自前のSVGで描く。背景画像とマーカーの
    投影を合わせるため、緯度はWebメルカトルで扱う（mercatorY）。
@@ -40,6 +41,10 @@ export function Map({
 }: MapProps) {
   // オフライン・API障害では、キー未設定のときと同じ見た目に戻す
   const [bgFailed, setBgFailed] = useState(false);
+
+  const geoapifyKey = useGeoapifyKey();
+  const [keyInput, setKeyInput] = useState("");
+  const [editingKey, setEditingKey] = useState(false);
 
   const points = useMemo(
     () => plan.map((p) => spots[p.spotId]).filter(Boolean),
@@ -165,6 +170,44 @@ export function Map({
             : `現在地は位置情報から${here.accuracy ? `（誤差およそ${Math.round(here.accuracy)}m）` : ""}`
           : "現在地はまだ取れていません"}
       </div>
+
+      {(!geoapifyKey || editingKey) ? (
+        <form
+          className="map__keyform"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const v = keyInput.trim();
+            if (!v) return;
+            setGeoapifyKey(v);
+            setKeyInput("");
+            setBgFailed(false);
+            setEditingKey(false);
+          }}
+        >
+          <input
+            className="map__keyinput"
+            type="text"
+            autoComplete="off"
+            placeholder="Geoapify APIキーを貼り付け"
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+          />
+          <button type="submit" className="map__keysave" disabled={!keyInput.trim()}>保存</button>
+          <p className="map__keyhint">
+            実際の地図画像を出すには無料のAPIキーが要ります。
+            <a href="https://www.geoapify.com/" target="_blank" rel="noreferrer">geoapify.com</a>
+            で登録（カード不要）すると取れます。キーはこの端末にだけ保存されます。
+          </p>
+        </form>
+      ) : (
+        <button
+          type="button"
+          className="map__keyedit"
+          onClick={() => setEditingKey(true)}
+        >
+          地図APIキーを変更
+        </button>
+      )}
     </div>
   );
 }
