@@ -60,6 +60,7 @@ function wrap(load: () => Promise<TripStore>): TripStore {
       return (await get()).createTrip(mode, plan, startMin, customSpots);
     },
     async updatePlan(id, plan) { return (await get()).updatePlan(id, plan); },
+    async addPhoto(id, spotId, photoDataUrl) { return (await get()).addPhoto(id, spotId, photoDataUrl); },
     async consumeCall(id) { return (await get()).consumeCall(id); },
     async finishTrip(id) { return (await get()).finishTrip(id); },
     async setRoomLocked(id, locked) { return (await get()).setRoomLocked(id, locked); },

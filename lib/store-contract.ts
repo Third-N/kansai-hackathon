@@ -38,6 +38,8 @@ export interface TripStore {
     customSpots?: Record<string, Spot>
   ): Promise<Trip>;
   updatePlan(id: string, plan: PlanItem[]): Promise<Trip>;
+  /** 道中記の写真を1枚持たせる。同じ行き先に足すと上書き */
+  addPhoto(id: string, spotId: string, photoDataUrl: string): Promise<Trip>;
   consumeCall(id: string): Promise<Trip>;
   /** 道中を終える。これを呼ばないと getLastFinished が永久に空になる。幹事だけ */
   finishTrip(id: string): Promise<Trip>;

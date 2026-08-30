@@ -23,6 +23,7 @@ function toTrip(r, members) {
         startMin: Number(r.start_min),
         plan: r.plan ?? [],
         customSpots: r.custom_spots && Object.keys(r.custom_spots).length > 0 ? r.custom_spots : undefined,
+        photos: r.photos && Object.keys(r.photos).length > 0 ? r.photos : undefined,
         members,
         callsUsed: Number(r.calls_used),
         status: r.status,
@@ -194,6 +195,17 @@ export function createSupabaseStore(sb, opts = {}) {
             });
             if (res.error)
                 fail("道程の更新", res.error);
+            return (await withMembers(res.data));
+        },
+        async addPhoto(id, spotId, photoDataUrl) {
+            const res = await sb.rpc("add_photo", {
+                p_trip_id: id,
+                p_spot_id: spotId,
+                p_photo: photoDataUrl,
+                p_member_id: await memberId(),
+            });
+            if (res.error)
+                fail("写真の追加", res.error);
             return (await withMembers(res.data));
         },
         async consumeCall(id) {

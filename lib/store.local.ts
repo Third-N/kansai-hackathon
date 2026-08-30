@@ -148,6 +148,15 @@ export const localStore: TripStore = {
     return trips[i];
   },
 
+  async addPhoto(id, spotId, photoDataUrl) {
+    const trips = read();
+    const i = trips.findIndex((t) => t.id === id);
+    if (i < 0) throw new Error("trip not found");
+    trips[i] = { ...trips[i], photos: { ...trips[i].photos, [spotId]: photoDataUrl } };
+    write(trips);
+    return trips[i];
+  },
+
   async consumeCall(id) {
     const trips = read();
     const i = trips.findIndex((t) => t.id === id);

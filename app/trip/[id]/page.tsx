@@ -15,6 +15,9 @@ import { useLocation } from "@/lib/useLocation";
 import { weather, toEnvironment } from "@/lib/weather";
 import { useRealWeather } from "@/lib/useRealWeather";
 import { useGeoapifyKeyFromSupabase } from "@/lib/useGeoapifyKeyFromSupabase";
+import { useInterruptNotify } from "@/lib/useInterruptNotify";
+import { resizeImageToDataUrl } from "@/lib/photo";
+import { useNearbyCrowd } from "@/lib/useNearbyCrowd";
 import { Map } from "@/components/Map";
 import { hhmm, jpDate } from "@/lib/format";
 import type { Trip } from "@/lib/types";
@@ -30,13 +33,41 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
   const [loaded, setLoaded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [myId, setMyId] = useState<string | null>(null);
+  const [confirmingFinish, setConfirmingFinish] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       setTrip(await store.getTrip(id));
       setLoaded(true);
     })();
+    store.currentMemberId().then(setMyId);
   }, [id]);
+
+  const isHost = trip?.members.find((m) => m.id === myId)?.isHost ?? false;
+
+  const finish = async () => {
+    if (!trip) return;
+    const done = await store.finishTrip(trip.id);
+    setTrip(done);
+    router.push("/");
+  };
+
+  const addPhoto = async (file: File | undefined, spotId: string) => {
+    if (!file || !trip) return;
+    setPhotoBusy(true);
+    setPhotoError(null);
+    try {
+      const dataUrl = await resizeImageToDataUrl(file);
+      setTrip(await store.addPhoto(trip.id, spotId, dataUrl));
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : "写真を追加できませんでした");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   const spots = trip ? spotsFor(trip) : SPOTS;
 
@@ -62,6 +93,7 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
 
   /* 位置。デモなら時計から、そうでなければ実機のGPS */
   const here = useLocation(trip?.id ?? null, trip?.plan ?? [], spots, sim?.timeline ?? [], nowMin);
+  const nearbyCrowd = useNearbyCrowd(here.spot?.id ?? null);
 
   /* 訪問済みの分は動かさない。
      位置が取れているならそちらを優先する（実際に行ったかどうかで決める）。
@@ -102,6 +134,8 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
 
   const showInterrupt =
     !!copy && !dismissed && !!trip && trip.callsUsed < CALLS_PER_DAY;
+
+  useInterruptNotify(showInterrupt, copy?.title ?? "", copy?.body ?? "");
 
   const accept = async () => {
     if (!trip || !revision) return;
@@ -190,6 +224,12 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
         </span>
       </div>
 
+      {nearbyCrowd !== null && (
+        <p className="partynote">
+          今ここには、あなたを含めて{nearbyCrowd}人がこのアプリを開いています
+        </p>
+      )}
+
       <Map
         plan={trip.plan}
         spots={spots}
@@ -204,7 +244,54 @@ export default function TripPage({ params }: { params: Promise<{ id: string }> }
         </p>
       )}
 
+      {here.spot && (
+        <div className="photoadd">
+          <label className="photoadd__btn">
+            {trip.photos?.[here.spot.id] ? "この場所の写真を変える" : `${here.spot.name}の写真を追加`}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              disabled={photoBusy}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                void addPhoto(file, here.spot!.id);
+              }}
+            />
+          </label>
+          {photoBusy && <p className="spotsearch__hint">保存しています…</p>}
+          {photoError && <p className="join__error">{photoError}</p>}
+          {trip.photos?.[here.spot.id] && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="photoadd__preview" src={trip.photos[here.spot.id]} alt="" />
+          )}
+        </div>
+      )}
+
       {toast && <div className="toast">{toast}</div>}
+
+      {isHost && (
+        <div className="endtrip">
+          {!confirmingFinish ? (
+            <button type="button" className="endtrip__ask" onClick={() => setConfirmingFinish(true)}>
+              道中を終える
+            </button>
+          ) : (
+            <div className="endtrip__confirm">
+              <p>ここで道中を終えます。あとから戻れません。</p>
+              <div className="endtrip__row">
+                <button type="button" className="endtrip__cancel" onClick={() => setConfirmingFinish(false)}>
+                  やめる
+                </button>
+                <button type="button" className="endtrip__go" onClick={finish}>
+                  終える
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {showInterrupt && copy && (
         <Interrupt

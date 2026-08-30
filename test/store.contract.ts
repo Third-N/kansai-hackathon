@@ -113,6 +113,16 @@ export function runStoreContract(h: Harness): void {
       assert.deepEqual((await store.getTrip(t.id))!.customSpots, customSpots);
     });
 
+    it("道中記の写真を足せる。同じ行き先ならあとから上書きできる", async () => {
+      const t = await store.createTrip("solo", PLAN, 630);
+      const a = await store.addPhoto(t.id, "inari", "data:image/jpeg;base64,AAA");
+      assert.equal(a.photos?.inari, "data:image/jpeg;base64,AAA");
+
+      const b = await store.addPhoto(t.id, "inari", "data:image/jpeg;base64,BBB");
+      assert.equal(b.photos?.inari, "data:image/jpeg;base64,BBB");
+      assert.equal((await store.getTrip(t.id))!.photos?.inari, "data:image/jpeg;base64,BBB");
+    });
+
     it("呼び出し回数は増え、上限で止まる", async () => {
       const t = await store.createTrip("solo", PLAN, 630);
       let trip = t;

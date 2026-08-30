@@ -75,14 +75,20 @@ export default function LogPage({ params }: { params: Promise<{ id: string }> })
               <div className="chips">
                 <span className="chip chip--plus">気分<b>{signed(g.mpOut - g.mpIn)}</b></span>
               </div>
+              {trip.photos?.[g.spotId] && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="stop__photo" src={trip.photos[g.spotId]} alt="" />
+              )}
             </div>
           </li>
         ))}
       </ol>
 
-      <p className="anon" style={{ marginTop: 20 }}>
-        写真はここに入ります。撮った瞬間ではなく、終わってから見る場所に置いています。
-      </p>
+      {!trip.photos || Object.keys(trip.photos).length === 0 ? (
+        <p className="anon" style={{ marginTop: 20 }}>
+          写真はまだありません。道中の画面の「現在地」から、その場で足せます。
+        </p>
+      ) : null}
     </div>
   );
 }

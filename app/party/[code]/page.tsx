@@ -12,6 +12,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
   const [members, setMembers] = useState<Member[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [shareMsg, setShareMsg] = useState<string | null>(null);
+  const [myId, setMyId] = useState<string | null>(null);
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
@@ -23,8 +24,17 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
       // B が Supabase Realtime に差し替える
       unsub = store.subscribeMembers(found.id, setMembers);
     })();
+    store.currentMemberId().then(setMyId);
     return () => unsub?.();
   }, [code]);
+
+  const isHost = members.find((m) => m.id === myId)?.isHost ?? false;
+
+  const toggleLock = async () => {
+    if (!trip) return;
+    const updated = await store.setRoomLocked(trip.id, !trip.locked);
+    setTrip(updated);
+  };
 
   const share = async () => {
     const url = `${window.location.origin}/party/${encodeURIComponent(decodeURIComponent(code))}`;
@@ -92,6 +102,13 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
         道中で表示されるのは<b>パーティ全体の体力</b>だけです。<br />
         誰が疲れているか、誰が何を選んだかは、最後まで出ません。
       </p>
+
+      {isHost && (
+        <button type="button" className="lockbtn" onClick={toggleLock}>
+          {trip.locked ? "待合をひらく" : "待合を閉じる"}
+        </button>
+      )}
+      {trip.locked && <p className="code__hint">閉じています。新しい人は入れません</p>}
 
       <button
         className="go"

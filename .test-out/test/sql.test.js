@@ -46,7 +46,7 @@ async function asAnon(sql, params = []) {
 describe("スキーマと権限", () => {
     before(async () => { b = await createPgliteBackend(); });
     after(async () => { await b.close(); });
-    beforeEach(async () => { await b.raw.exec("truncate trips cascade;"); });
+    beforeEach(async () => { await b.raw.exec("truncate trips cascade; truncate join_attempts; truncate spot_pings;"); });
     it("anon は道中・参加者・問いを読める", async () => {
         await newRound(60);
         assert.ok(await asAnon("select * from trips"), "trips が読めない");
@@ -186,6 +186,42 @@ describe("スキーマと権限", () => {
         }
         assert.equal(ok, false, "閉じた待合に入れてしまう");
     });
+    it("あいことばの総当たりは、短時間に集中すると弾かれる", async () => {
+        const tripId = await newRoom();
+        const code = (await b.raw.query("select code from trips where id=$1", [tripId]))
+            .rows[0].code;
+        // 20回までは、外れでも普通に「見つからない」として処理される
+        for (let i = 0; i < 20; i++) {
+            await b.raw.query("select join_by_code($1,'x',$2,12)", ["ハズレ" + i, uid(200 + i)]);
+        }
+        // 21回目以降は、正しいあいことばでも弾かれる
+        let ok = true;
+        try {
+            await b.raw.query("select join_by_code($1,'あと',$2,12)", [code, uid(300)]);
+        }
+        catch {
+            ok = false;
+        }
+        assert.equal(ok, false, "短時間の連続試行を絞り込めていない");
+    });
+    it("近くにいる人数は、同じ人が何度合図しても重複して数えない", async () => {
+        await b.raw.query("select ping_spot('kiyomizu',$1)", [uid(1)]);
+        await b.raw.query("select ping_spot('kiyomizu',$1)", [uid(1)]);
+        await b.raw.query("select ping_spot('kiyomizu',$1)", [uid(2)]);
+        await b.raw.query("select ping_spot('inari',$1)", [uid(3)]);
+        const r = await b.raw.query("select nearby_crowd('kiyomizu') as n");
+        assert.equal(r.rows[0].n, 2, "重複を数えてしまっている、または別の行き先と混ざっている");
+    });
+    it("誰の合図かは直接読めない。集計（件数）だけが取れる", async () => {
+        await b.raw.query("select ping_spot('kiyomizu',$1)", [uid(1)]);
+        assert.equal(await asAnon("select * from spot_pings"), false, "個々の合図が読めてしまう");
+    });
+    it("古い合図は数に入らない", async () => {
+        await b.raw.query("select ping_spot('kiyomizu',$1)", [uid(1)]);
+        await b.raw.query("update spot_pings set pinged_at = now() - interval '25 minutes' where member_id=$1", [uid(1)]);
+        const r = await b.raw.query("select nearby_crowd('kiyomizu') as n");
+        assert.equal(r.rows[0].n, 0, "古い合図がいつまでも数えられている");
+    });
     it("開き直しても幹事の名前が変わらない", async () => {
         const tripId = await newRoom();
         const code = (await b.raw.query("select code from trips where id=$1", [tripId]))
@@ -232,6 +268,26 @@ describe("スキーマと権限", () => {
             }
             assert.equal(ok, false, "非参加者が書き込めてしまう");
         }
+    });
+    it("参加者でなければ写真も足せない。大きすぎる写真は拒む", async () => {
+        const tripId = await newRoom();
+        let ok = true;
+        try {
+            await b.raw.query("select add_photo($1,'inari','data:x',$2)", [tripId, uid(404)]);
+        }
+        catch {
+            ok = false;
+        }
+        assert.equal(ok, false, "非参加者が写真を足せてしまう");
+        const tooBig = "x".repeat(500001);
+        ok = true;
+        try {
+            await b.raw.query("select add_photo($1,'inari',$2,$3)", [tripId, tooBig, uid(1)]);
+        }
+        catch {
+            ok = false;
+        }
+        assert.equal(ok, false, "大きすぎる写真を受け付けてしまう");
     });
     it("セッションがあるときは、他人を名乗れない", async () => {
         await b.actAs(uid(1));
