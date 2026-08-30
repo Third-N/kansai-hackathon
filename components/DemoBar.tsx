@@ -2,6 +2,7 @@
 import { DEMO_SPEEDS, demo, exitDemo } from "@/lib/demo";
 import { weather, RAIN_LABEL, type Rain } from "@/lib/weather";
 import { hhmm } from "@/lib/format";
+import { fireInterruptNotification } from "@/lib/useInterruptNotify";
 import { useEffect, useRef } from "react";
 
 /* ============================================================
@@ -109,6 +110,14 @@ export function DemoBar() {
           title="位置を時計から作る。切ると実機のGPSを見る"
         >
           位置はモック
+        </button>
+
+        <button
+          className="demobar__chip"
+          onClick={() => fireInterruptNotification("道中から呼び出し", "審査員向け: 通知はこんな感じで出ます")}
+          title="実際の割り込み条件を待たずに、通知（と振動）を試せる"
+        >
+          通知を試す
         </button>
 
         <button className="demobar__exit" onClick={exitDemo}>デモを出る</button>

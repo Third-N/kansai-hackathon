@@ -15,6 +15,31 @@ import { useEffect, useRef } from "react";
    離脱を招く）。拒否・非対応ブラウザでは、今まで通り画面内の
    割り込みだけで動く（何も壊れない）。
    ============================================================ */
+/** 実際に鳴らす部分。フックからも、デモ操作卓の「試す」ボタンからも呼ぶ */
+export function fireInterruptNotification(title: string, body: string): void {
+  if (typeof navigator !== "undefined" && navigator.vibrate) {
+    navigator.vibrate([200, 100, 200]);
+  }
+
+  if (typeof Notification === "undefined") return;
+
+  const notify = () => {
+    try {
+      new Notification(title, { body, tag: "dochu-interrupt" });
+    } catch {
+      // 非対応・非HTTPS等。振動とバナーだけで済ませる
+    }
+  };
+
+  if (Notification.permission === "granted") {
+    notify();
+  } else if (Notification.permission === "default") {
+    void Notification.requestPermission().then((perm) => {
+      if (perm === "granted") notify();
+    });
+  }
+}
+
 export function useInterruptNotify(active: boolean, title: string, body: string): void {
   const firedFor = useRef<string | null>(null);
 
@@ -26,27 +51,6 @@ export function useInterruptNotify(active: boolean, title: string, body: string)
     const key = `${title}|${body}`;
     if (firedFor.current === key) return;
     firedFor.current = key;
-
-    if (typeof navigator !== "undefined" && navigator.vibrate) {
-      navigator.vibrate([200, 100, 200]);
-    }
-
-    if (typeof Notification === "undefined") return;
-
-    const notify = () => {
-      try {
-        new Notification(title, { body, tag: "dochu-interrupt" });
-      } catch {
-        // 非対応・非HTTPS等。振動とバナーだけで済ませる
-      }
-    };
-
-    if (Notification.permission === "granted") {
-      notify();
-    } else if (Notification.permission === "default") {
-      void Notification.requestPermission().then((perm) => {
-        if (perm === "granted") notify();
-      });
-    }
+    fireInterruptNotification(title, body);
   }, [active, title, body]);
 }
