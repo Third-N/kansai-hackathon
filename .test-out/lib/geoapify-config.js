@@ -6,15 +6,14 @@ import { createSettings } from "./tiny-store";
 
    キーが無ければ地図は今まで通り点と線だけの図で動く。
 
-   キーはビルド時の環境変数（NEXT_PUBLIC_GEOAPIFY_KEY）ではなく、
-   Supabase（useGeoapifyKeyFromSupabase / app_config テーブル）か、
-   使う人がその場で入力するかで、この端末に保存する方式にしている。
-   このアプリはリポジトリを公開している都合上、キーをコードや
-   .env にコミットしたくない（誰でも取り放題になってしまう）ため。
+   優先順位: 画面で入力したもの → Supabase（app_config）→ 環境変数
+   → ここに直書きした既定値。直書きはこの用途専用のキーであることを
+   前提にしている（他で使い回さない）。
    ============================================================ */
+const DEFAULT_KEY = "518bfe6cf8fd4e8db4178121faaff9ac";
 const stored = createSettings("dochu:geoapify-key", { key: "" });
 export function geoapifyKey() {
-    return stored.get().key || process.env.NEXT_PUBLIC_GEOAPIFY_KEY || undefined;
+    return stored.get().key || process.env.NEXT_PUBLIC_GEOAPIFY_KEY || DEFAULT_KEY || undefined;
 }
 export function isGeoapifyConfigured() {
     return !!geoapifyKey();
@@ -26,5 +25,5 @@ export function setGeoapifyKey(key) {
 /** コンポーネントから購読する。キーの有無で再描画したいときに使う */
 export function useGeoapifyKey() {
     const { key } = stored.use();
-    return key || process.env.NEXT_PUBLIC_GEOAPIFY_KEY || undefined;
+    return key || process.env.NEXT_PUBLIC_GEOAPIFY_KEY || DEFAULT_KEY || undefined;
 }
