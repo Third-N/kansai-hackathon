@@ -18,6 +18,14 @@ export interface PlaceSuggestion {
   formatted: string;
   lat: number;
   lng: number;
+  /**
+   * 端末内900件からの候補だけが持つ、混雑・気分カーブの手がかり。
+   * lib/local-place-search.ts の LocalPlaceCategory と同じ値の文字列。
+   * Geoapifyのオンライン検索には無いので undefined のまま
+   * （custom-spot.ts 側で「その他・並」として扱う）。
+   */
+  category?: string;
+  priority?: number;
 }
 
 const KYOTO = { lat: 35.0116, lng: 135.7681 };

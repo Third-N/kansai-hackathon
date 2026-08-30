@@ -190,5 +190,7 @@ export function searchLocalPlaces(
       formatted: [place.area, dataset.categoryLabels[place.category]].filter(Boolean).join("・"),
       lat: place.lat,
       lng: place.lng,
+      category: place.category,
+      priority: place.priority,
     }));
 }

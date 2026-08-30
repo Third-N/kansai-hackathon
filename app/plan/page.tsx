@@ -112,7 +112,10 @@ function PlanInner() {
       setSuggestions([]);
       return;
     }
-    const spot = makeCustomSpot({ name: s.name, sub: s.formatted, lat: s.lat, lng: s.lng });
+    const spot = makeCustomSpot({
+      name: s.name, sub: s.formatted, lat: s.lat, lng: s.lng,
+      category: s.category, priority: s.priority,
+    });
     setCustomSpots((c) => ({ ...c, [spot.id]: spot }));
     setPicked((p) => [...p, spot.id]);
     setQuery("");

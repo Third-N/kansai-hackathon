@@ -139,5 +139,7 @@ export function searchLocalPlaces(dataset, query, limit = 8) {
         formatted: [place.area, dataset.categoryLabels[place.category]].filter(Boolean).join("・"),
         lat: place.lat,
         lng: place.lng,
+        category: place.category,
+        priority: place.priority,
     }));
 }
